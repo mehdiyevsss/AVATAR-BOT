@@ -1,0 +1,53 @@
+[
+    {
+        "title": "Resetting Your Device",
+        "category": "Product Support",
+        "content": "To reset your device, press and hold the power button for 10 seconds until the screen goes blank and the logo reappears."
+    },
+    {
+        "title": "Warranty Information",
+        "category": "Policies",
+        "content": "Our products come with a 1-year warranty covering manufacturer defects. Accidental damage is not covered."
+    },
+    {
+        "title": "Battery Life",
+        "category": "Product Support",
+        "content": "The device battery lasts up to 12 hours on a single charge, depending on usage."
+    },
+    {
+        "title": "Refund Policy",
+        "category": "Policies",
+        "content": "Customers can request a refund within 30 days of purchase, provided the product is in its original condition."
+    },
+    {
+        "title": "Connecting to Wi-Fi",
+        "category": "Product Support",
+        "content": "Go to Settings > Wi-Fi, select your network, and enter the password to connect."
+    },
+    {
+        "title": "Device Not Charging",
+        "category": "Troubleshooting",
+        "content": "If the device does not charge, try using a different charging cable and adapter. Make sure the charging port is clean and free from debris."
+    },
+    {
+        "title": "Software Update",
+        "category": "Product Support",
+        "content": "To update your device, go to Settings > About > Software Update and follow the on-screen instructions."
+    },
+    {
+        "title": "Returning a Product",
+        "category": "Policies",
+        "content": "To return a product, visit our website and fill out the return form. Ensure the item is securely packaged and include the original receipt."
+    },
+    {
+        "title": "Product Registration",
+        "category": "Product Support",
+        "content": "Register your product on our website by entering the serial number and filling out the registration form."
+    },
+    {
+        "title": "Order Status",
+        "category": "Customer Support",
+        "content": "To check your order status, visit our website and enter your order number under the 'Track My Order' section."
+    }
+]
+

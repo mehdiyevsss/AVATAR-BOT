@@ -4,7 +4,7 @@ import faiss
 import numpy as np
 
 # Path to your customer service JSON file
-data_path = "/home/mehdiyevs/Documents/aiproject/rag-bot/data/data.json"
+data_path = "data/data.json"
 
 # Load your customer service data
 with open(data_path, 'r') as f:
@@ -29,5 +29,5 @@ index = faiss.IndexFlatL2(dim)
 index.add(embeddings)
 
 # Save the FAISS index
-faiss.write_index(index, "/home/mehdiyevs/Documents/aiproject/rag-bot/embeddings/faiss_index.idx")
+faiss.write_index(index, "embeddings/faiss_index.idx")
 print("FAISS index created and saved with updated customer service data.")

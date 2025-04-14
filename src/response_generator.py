@@ -3,7 +3,11 @@ from transformers import BlenderbotTokenizer, BlenderbotForConditionalGeneration
 import torch
 import faiss
 import json
+import os
 
+# Get the current directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
 
 embedder = SentenceTransformer('all-MiniLM-L6-v2')
 
@@ -20,10 +24,11 @@ blenderbot_model = BlenderbotForConditionalGeneration.from_pretrained(model_name
 
 # Function to load the FAISS index dynamically
 def load_index():
-    return faiss.read_index("/home/mehdiyevs/Documents/aiproject/rag-bot/embeddings/faiss_index.idx")
+    index_path = os.path.join(project_root, 'embeddings', 'faiss_index.idx')
+    return faiss.read_index(index_path)
 
 # Load customer service data
-data_path = "/home/mehdiyevs/Documents/aiproject/rag-bot/data/data.json"
+data_path = os.path.join(project_root, 'data', 'data.json')
 with open(data_path, 'r') as f:
     data = json.load(f)
 

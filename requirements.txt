@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-dotenv
+openai
+faiss-cpu
+sentence-transformers
+python-docx
+PyMuPDF
+pdfplumber
+streamlit
+openai
+audio_recorder_streamlit
+streamlit-float
+python-dotenv

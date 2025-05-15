@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Customer Service Assistant</title>
+  <style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #202020;
+        color: white;
+        margin: 0;
+        padding: 0;
+    }
+
+    .main-wrapper {
+        display: flex;
+        max-width: 1200px;
+        margin: 0 auto;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    #avatar-container {
+        flex: 1;
+        background-color: #202020;
+        padding: 10px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    #avatar {
+        width: 100%;
+        height: 100%;
+    }
+
+    .chat-container {
+        margin-top: 100px;
+        flex: 1;
+        max-width: 500px;
+        height: 600px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 20px;
+        background-color: #f5f5f5;
+        border-radius: 12px;
+        color: black;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        box-sizing: border-box;
+    }
+
+    h1 {
+        margin-top: 0;
+    }
+
+    #response-area {
+        flex: 1;
+        overflow-y: auto;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 10px;
+        margin-bottom: 20px;
+        max-height: 500px;
+    }
+
+    .input-container {
+        display: flex;
+        gap: 10px;
+    }
+
+    #user-input {
+        flex-grow: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 16px;
+    }
+
+    #send-button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    #send-button:hover {
+        background-color: #0056b3;
+    }
+
+    .loading {
+        text-align: center;
+        color: #666;
+        margin-bottom: 10px;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js/+esm",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.4/modules/talkinghead.mjs"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import { TalkingHead } from "talkinghead";
+    let ws;
+    let mediaRecorder;
+    let recording = false;
+
+    const recordButton = document.getElementById('record-button');
+
+    function toggleRecording() {
+      if (!recording) {
+          startRecording();
+      } else {
+          stopRecording();
+      }
+    }
+
+    function startRecording() {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+          ws = new WebSocket(`ws://${window.location.host}/ws`);
+          mediaRecorder = new MediaRecorder(stream);
+
+          ws.onmessage = async (event) => {
+              if (event.data instanceof Blob) {
+                  const blob = event.data;
+                  const url = URL.createObjectURL(blob);
+                  const audio = new Audio(url);
+                  head.speakText(" ");
+                  await audio.play();
+              }
+          };
+
+          mediaRecorder.ondataavailable = (e) => {
+              if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                  ws.send(e.data);
+              }
+          };
+
+          mediaRecorder.start();
+          recordButton.innerText = "🛑 Stop Talking";
+          recording = true;
+      });
+    }
+
+    function stopRecording() {
+      if (mediaRecorder) mediaRecorder.stop();
+      if (ws) ws.close();
+      recordButton.innerText = "🎙️ Start Talking";
+      recording = false;
+    }
+
+    recordButton.addEventListener('click', toggleRecording);
+
+    let head;
+
+    document.addEventListener('DOMContentLoaded', async function () {
+      const nodeAvatar = document.getElementById('avatar');
+      const nodeLoading = document.getElementById('loading');
+      const userInput = document.getElementById('user-input');
+      const sendButton = document.getElementById('send-button');
+      const responseArea = document.getElementById('response-area');
+
+      try {
+        nodeLoading.textContent = "Loading avatar...";
+        head = new TalkingHead(nodeAvatar, {
+          lipsyncModules: ["en", "fi"],
+          cameraView: "upper"
+        });
+
+        await head.showAvatar({
+            url: '/static/brunette.glb',
+            body: 'F',
+            avatarMood: 'neutral',
+            lipsyncLang: 'en'
+        }, (ev) => {
+            if (ev.lengthComputable) {
+                let val = Math.min(100, Math.round(ev.loaded / ev.total * 100));
+                nodeLoading.textContent = "Loading " + val + "%";
+            }
+        });
+        
+
+        nodeLoading.style.display = 'none';
+      } catch (error) {
+        console.error(error);
+        nodeLoading.textContent = "Error loading avatar.";
+      }
+
+      async function playAudio(url) {
+        const audio = new Audio(url);
+        await audio.play();
+      }
+
+      async function sendMessage() {
+        const message = userInput.value.trim();
+        if (!message) return;
+
+        nodeLoading.style.display = 'block';
+        nodeLoading.textContent = "Thinking...";
+
+        responseArea.innerHTML += `<p><strong>You:</strong> ${message}</p>`;
+        userInput.value = '';
+
+        try {
+          const response = await fetch('/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: message }),
+          });
+
+          const data = await response.json();
+
+          if (data.response) {
+            responseArea.innerHTML += `<p><strong>Bot:</strong> ${data.response}</p>`;
+            await playAudio("/static/output.wav");
+          } else if (data.error) {
+            responseArea.innerHTML += `<p><strong>Error:</strong> ${data.error}</p>`;
+          }
+        } catch (error) {
+          responseArea.innerHTML += `<p><strong>Error:</strong> Failed to get response from server.</p>`;
+        } finally {
+          nodeLoading.style.display = 'none';
+          responseArea.scrollTop = responseArea.scrollHeight;
+        }
+      }
+
+      sendButton.addEventListener('click', sendMessage);
+      userInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') sendMessage();
+      });
+
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") head?.start();
+        else head?.stop();
+      });
+    });
+  </script>
+</head>
+
+<body>
+  <div class="main-wrapper">
+    <div id="avatar-container">
+      <div id="avatar"></div>
+    </div>
+
+    <div class="chat-container">
+      <h1>Customer Service Assistant</h1>
+      <div id="response-area"></div>
+      <div class="loading" id="loading">I'm thinking...</div>
+      <div class="input-container">
+        <input type="text" id="user-input" placeholder="Type your message here..." />
+        <button id="send-button">Send</button>
+        <button id="record-button">🎙️ Start Talking</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

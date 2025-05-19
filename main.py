@@ -8,7 +8,7 @@ from streamlit.components.v1 import html
 st.set_page_config(page_title="Voice Avatar Chatbot", layout="wide")
 float_init()
 
-st.title("🗣️ Voice Avatar Chatbot with RAG")
+st.title("🗣 Voice Avatar Chatbot with RAG")
 
 # Layout: Avatar left, chat right
 col1, col2 = st.columns([1, 2])
@@ -26,12 +26,32 @@ with col1:
 <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 """, height=420)
 
-
 with col2:
     if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I assist you?"}]
 
+    # Voice input
     audio_bytes = audio_recorder()
+
+    # Initialize clear flag
+    if "clear_text_input" not in st.session_state:
+        st.session_state.clear_text_input = False
+
+    # Process text input submitted in previous run
+    if st.session_state.get("user_input", "") and not st.session_state.clear_text_input:
+        user_text = st.session_state.user_input
+        st.session_state.messages.append({"role": "user", "content": user_text})
+        st.session_state.clear_text_input = True  # flag to clear input next cycle
+    else:
+        user_text = ""
+
+    # Clear text input BEFORE rendering the widget to avoid error
+    if st.session_state.clear_text_input:
+        st.session_state.user_input = ""
+        st.session_state.clear_text_input = False
+
+    # Text input widget (binds to session state key)
+    user_text = st.text_input("Type your message here and press Enter:", key="user_input")
 
     st.markdown("""
         <style>
@@ -53,6 +73,7 @@ with col2:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # Handle voice input transcription
     if audio_bytes:
         with st.spinner("Transcribing..."):
             with open("temp_input.mp3", "wb") as f:
@@ -64,6 +85,7 @@ with col2:
             with st.chat_message("user"):
                 st.write(transcript)
 
+    # Generate response if last message is user
     if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
             with st.spinner("Generating response..."):

@@ -1,12 +1,12 @@
 import os
-from dotenv import load_dotenv
+import uuid
 import base64
-import streamlit as st
+import tempfile
+from dotenv import load_dotenv
 from openai import OpenAI
 from utils.embedder import load_index
 from utils.retriever import retrieve
 from utils.prompt_helper import build_prompt
-import tempfile
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -42,17 +42,7 @@ def text_to_speech(text):
         voice="nova",
         input=text
     )
-    path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
+    os.makedirs("audio", exist_ok=True)
+    path = f"audio/{uuid.uuid4().hex}.mp3"
     response.stream_to_file(path)
     return path
-
-def autoplay_audio(file_path: str):
-    with open(file_path, "rb") as f:
-        data = f.read()
-    b64 = base64.b64encode(data).decode("utf-8")
-    md = f"""
-    <audio autoplay>
-    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-    </audio>
-    """
-    st.markdown(md, unsafe_allow_html=True)

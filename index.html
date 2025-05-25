@@ -4,108 +4,7 @@
   <meta charset="UTF-8" />
   <title>Voice Avatar Chatbot</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100vh;
-      width: 100vw;
-      font-family: "Segoe UI", sans-serif;
-      background: #1e1e1e;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .container {
-      display: flex;
-      height: 90vh;
-      width: 90vw;
-      max-width: 1400px;
-      border-radius: 16px;
-      background: #fff;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.25);
-      overflow: hidden;
-    }
-
-    model-viewer {
-      flex: 1 1 0;
-      height: 100%;
-      background-color: #000;
-    }
-
-    .chat-section {
-      flex: 1 1 0;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      background: #f5f5f5;
-      height: 100%;
-    }
-
-    .messages {
-      flex: 1;
-      overflow-y: auto;
-      margin-bottom: 15px;
-      padding-right: 10px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .message {
-      margin-bottom: 10px;
-      padding: 14px 18px;
-      border-radius: 14px;
-      font-size: 15px;
-      max-width: 100%;
-      background: #e0e0e0;
-      color: #000;
-    }
-
-    .assistant {
-      align-self: flex-start;
-      background-color: #dbe4ff;
-    }
-
-    .user {
-      align-self: flex-end;
-      background-color: #ffe2e2;
-    }
-
-    .record-btn {
-      padding: 14px;
-      font-size: 16px;
-      border-radius: 10px;
-      border: none;
-      background: #333;
-      color: white;
-      cursor: pointer;
-      transition: background 0.3s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .record-btn:disabled {
-      background: #666;
-    }
-
-    .spinner {
-      width: 16px;
-      height: 16px;
-      margin-left: 10px;
-      border: 2px solid white;
-      border-top: 2px solid transparent;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    /* Add your original styles here or keep as-is */
   </style>
 </head>
 <body>
@@ -119,12 +18,11 @@
 
   <div class="chat-section">
     <div class="messages" id="messages"></div>
-    <button id="recordBtn" class="record-btn">Record</button>
+    <button id="recordBtn" class="record-btn">🎙️ Record</button>
   </div>
 </div>
 
 <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-
 <script>
 const recordBtn = document.getElementById("recordBtn");
 const messagesEl = document.getElementById("messages");
@@ -132,8 +30,12 @@ const avatar = document.querySelector("#avatar");
 
 let mediaRecorder, audioChunks = [];
 let audioCtx, analyser, micSource;
+let interruptAudio = false;
+let currentAudio = null;
 
-recordBtn.onclick = async () => {
+recordBtn.onclick = startRecording;
+
+async function startRecording() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
   audioChunks = [];
@@ -149,7 +51,9 @@ recordBtn.onclick = async () => {
 
   showLoading(true);
   mediaRecorder.start();
-};
+
+  monitorInterrupts(stream); // Start continuous monitoring
+}
 
 function detectSilence(threshold = 0.01, timeout = 1500) {
   const data = new Uint8Array(analyser.fftSize);
@@ -170,41 +74,39 @@ function detectSilence(threshold = 0.01, timeout = 1500) {
 }
 
 function showLoading(loading) {
-  if (loading) {
-    recordBtn.disabled = true;
-    recordBtn.innerHTML = `Listening... <span class="spinner"></span>`;
-  } else {
-    recordBtn.disabled = false;
-    recordBtn.textContent = "🎙️ Record";
-  }
+  recordBtn.disabled = loading;
+  recordBtn.innerHTML = loading ? `Listening... <span class="spinner"></span>` : "🎙️ Record";
 }
 
-async function processRecording() {
-  const audioBlob = new Blob(audioChunks, { type: "audio/mp3" });
-  const formData = new FormData();
-  formData.append("audio", audioBlob, "voice.mp3");
+async function processRecording(forcedTranscript = null) {
+  if (!forcedTranscript) {
+    const audioBlob = new Blob(audioChunks, { type: "audio/mp3" });
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "voice.mp3");
 
-  const trans = await fetch("http://localhost:8000/transcribe", {
-    method: "POST",
-    body: formData
-  }).then(res => res.json());
+    const trans = await fetch("/transcribe", { method: "POST", body: formData })
+      .then(res => res.json());
+    forcedTranscript = trans.transcript;
+  }
 
-  addMessage("user", trans.transcript);
+  addMessage("user", forcedTranscript);
 
   const respForm = new FormData();
-  respForm.append("text", trans.transcript);
-  const resp = await fetch("http://localhost:8000/respond", {
-    method: "POST",
-    body: respForm
-  }).then(res => res.json());
+  respForm.append("text", forcedTranscript);
+  const resp = await fetch("/respond", { method: "POST", body: respForm })
+    .then(res => res.json());
 
   addMessage("assistant", resp.response);
 
-  const audio = new Audio("http://localhost:8000" + resp.audio_url);
+  const audio = new Audio(resp.audio_url);
+  currentAudio = audio;
   audio.play();
+  playAvatarMouth();
 
-  playAvatarMouth(); 
-  showLoading(false);
+  audio.onended = () => {
+    showLoading(false);
+    startRecording();
+  };
 }
 
 function addMessage(role, text) {
@@ -215,12 +117,38 @@ function addMessage(role, text) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-
 function playAvatarMouth() {
   avatar.animationName = "Talk";
-  setTimeout(() => {
-    avatar.animationName = "";
-  }, 2000);
+  setTimeout(() => { avatar.animationName = ""; }, 2000);
+}
+
+async function monitorInterrupts(stream) {
+  const recorder = new MediaRecorder(stream);
+  let chunks = [];
+
+  recorder.ondataavailable = e => chunks.push(e.data);
+  recorder.onstop = async () => {
+    const formData = new FormData();
+    formData.append("audio", new Blob(chunks, { type: "audio/mp3" }), "chunk.mp3");
+
+    const result = await fetch("/listen_chunk", {
+      method: "POST",
+      body: formData
+    }).then(r => r.json());
+
+    if (result.interrupt && currentAudio) {
+      currentAudio.pause();
+      interruptAudio = true;
+      showLoading(false);
+      addMessage("user", result.command);
+      processRecording(result.command);
+    } else {
+      if (!interruptAudio) setTimeout(() => monitorInterrupts(stream), 2500);
+    }
+  };
+
+  recorder.start();
+  setTimeout(() => recorder.stop(), 2500);
 }
 </script>
 

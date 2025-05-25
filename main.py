@@ -42,3 +42,18 @@ async def respond(text: str = Form(...)):
 async def serve_audio(filename: str):
     path = os.path.join("audio", filename)
     return FileResponse(path=path, media_type="audio/mpeg")
+
+@app.post("/listen_chunk")
+async def listen_chunk(audio: UploadFile):
+    temp_path = f"chunk_{uuid.uuid4().hex}.mp3"
+    with open(temp_path, "wb") as f:
+        f.write(await audio.read())
+
+    transcript = speech_to_text(temp_path)
+    os.remove(temp_path)
+
+    interrupt_keywords = ["stop", "wait", "no", "hold on", "listen"]
+    if any(kw in transcript.lower() for kw in interrupt_keywords):
+        return {"interrupt": True, "command": transcript}
+
+    return {"interrupt": False}

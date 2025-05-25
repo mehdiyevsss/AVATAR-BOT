@@ -1,18 +1,23 @@
 import os
 import uuid
-import base64
-import tempfile
 from dotenv import load_dotenv
 from openai import OpenAI
 from utils.embedder import load_index
 from utils.retriever import retrieve
 from utils.prompt_helper import build_prompt
 
+# Load API key from .env
 load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")  # ✅ Use standard key name
+
+if not api_key:
+    raise ValueError("OPENAI_API_KEY not found in .env")
+
 client = OpenAI(api_key=api_key)
 
+# Load index only once on startup
 index, chunks = load_index()
+
 
 def get_rag_response(user_input):
     results = retrieve(user_input, index, chunks)
@@ -27,6 +32,7 @@ def get_rag_response(user_input):
     )
     return response.choices[0].message.content
 
+
 def speech_to_text(audio_path):
     with open(audio_path, "rb") as audio_file:
         transcript = client.audio.transcriptions.create(
@@ -36,10 +42,11 @@ def speech_to_text(audio_path):
         )
     return transcript
 
+
 def text_to_speech(text):
     response = client.audio.speech.create(
         model="tts-1",
-        voice="nova",
+        voice="nova",  # You can change this to "echo", "shimmer", etc.
         input=text
     )
     os.makedirs("audio", exist_ok=True)

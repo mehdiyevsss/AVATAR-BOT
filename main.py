@@ -45,15 +45,22 @@ async def serve_audio(filename: str):
 
 @app.post("/listen_chunk")
 async def listen_chunk(audio: UploadFile):
+    import string
     temp_path = f"chunk_{uuid.uuid4().hex}.mp3"
     with open(temp_path, "wb") as f:
         f.write(await audio.read())
 
     transcript = speech_to_text(temp_path)
+    print("Transcript:", transcript)  # Debug log
     os.remove(temp_path)
 
     interrupt_keywords = ["stop", "wait", "no", "hold on", "listen"]
-    if any(kw in transcript.lower() for kw in interrupt_keywords):
+    cleaned = transcript.lower().translate(str.maketrans('', '', string.punctuation))
+    matched = [kw for kw in interrupt_keywords if kw in cleaned]
+    print("Matched:", matched)
+
+    if matched:
         return {"interrupt": True, "command": transcript}
 
-    return {"interrupt": False}
+    return {"interrupt": False, "command": transcript}
+

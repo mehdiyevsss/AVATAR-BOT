@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "soundFile": "C:\\Users\\Dell\\Desktop\\AVATAR-BOT-latest\\audio\\d03aa4868edc46168498d0b44f0ff414.ogg",
+    "duration": 2.78
+  },
+  "mouthCues": [
+    { "start": 0.00, "end": 0.09, "value": "X" },
+    { "start": 0.09, "end": 0.76, "value": "F" },
+    { "start": 0.76, "end": 1.02, "value": "X" },
+    { "start": 1.02, "end": 1.30, "value": "C" },
+    { "start": 1.30, "end": 1.79, "value": "B" },
+    { "start": 1.79, "end": 1.98, "value": "F" },
+    { "start": 1.98, "end": 2.03, "value": "E" },
+    { "start": 2.03, "end": 2.35, "value": "C" },
+    { "start": 2.35, "end": 2.42, "value": "B" },
+    { "start": 2.42, "end": 2.78, "value": "X" }
+  ]
+}

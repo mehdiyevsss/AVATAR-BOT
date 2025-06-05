@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "soundFile": "C:\\Users\\Dell\\Desktop\\AVATAR-BOT-latest\\audio\\457af8b7dfe543a6af1bec8a949ffdc7.ogg",
+    "duration": 3.60
+  },
+  "mouthCues": [
+    { "start": 0.00, "end": 0.06, "value": "X" },
+    { "start": 0.06, "end": 0.16, "value": "F" },
+    { "start": 0.16, "end": 0.23, "value": "C" },
+    { "start": 0.23, "end": 0.30, "value": "H" },
+    { "start": 0.30, "end": 0.38, "value": "A" },
+    { "start": 0.38, "end": 0.51, "value": "F" },
+    { "start": 0.51, "end": 0.72, "value": "B" },
+    { "start": 0.72, "end": 0.86, "value": "C" },
+    { "start": 0.86, "end": 0.93, "value": "H" },
+    { "start": 0.93, "end": 1.70, "value": "X" },
+    { "start": 1.70, "end": 1.83, "value": "C" },
+    { "start": 1.83, "end": 2.08, "value": "F" },
+    { "start": 2.08, "end": 2.15, "value": "E" },
+    { "start": 2.15, "end": 2.46, "value": "C" },
+    { "start": 2.46, "end": 3.09, "value": "B" },
+    { "start": 3.09, "end": 3.23, "value": "C" },
+    { "start": 3.23, "end": 3.30, "value": "B" },
+    { "start": 3.30, "end": 3.60, "value": "X" }
+  ]
+}

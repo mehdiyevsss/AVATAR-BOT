@@ -1,0 +1,43 @@
+{
+  "metadata": {
+    "soundFile": "C:\\Users\\Dell\\Desktop\\AVATAR-BOT-latest\\audio\\e4bb9948154f40d594b9689d1aaaa5ef.ogg",
+    "duration": 6.86
+  },
+  "mouthCues": [
+    { "start": 0.00, "end": 0.01, "value": "X" },
+    { "start": 0.01, "end": 0.09, "value": "C" },
+    { "start": 0.09, "end": 0.16, "value": "A" },
+    { "start": 0.16, "end": 0.46, "value": "B" },
+    { "start": 0.46, "end": 0.56, "value": "A" },
+    { "start": 0.56, "end": 0.63, "value": "B" },
+    { "start": 0.63, "end": 0.69, "value": "E" },
+    { "start": 0.69, "end": 0.77, "value": "A" },
+    { "start": 0.77, "end": 1.00, "value": "E" },
+    { "start": 1.00, "end": 1.21, "value": "C" },
+    { "start": 1.21, "end": 1.33, "value": "A" },
+    { "start": 1.33, "end": 1.41, "value": "B" },
+    { "start": 1.41, "end": 1.48, "value": "E" },
+    { "start": 1.48, "end": 1.55, "value": "C" },
+    { "start": 1.55, "end": 1.62, "value": "B" },
+    { "start": 1.62, "end": 1.69, "value": "E" },
+    { "start": 1.69, "end": 1.90, "value": "C" },
+    { "start": 1.90, "end": 2.04, "value": "G" },
+    { "start": 2.04, "end": 2.53, "value": "B" },
+    { "start": 2.53, "end": 3.06, "value": "X" },
+    { "start": 3.06, "end": 3.20, "value": "A" },
+    { "start": 3.20, "end": 3.24, "value": "B" },
+    { "start": 3.24, "end": 3.35, "value": "C" },
+    { "start": 3.35, "end": 3.43, "value": "A" },
+    { "start": 3.43, "end": 3.97, "value": "B" },
+    { "start": 3.97, "end": 4.04, "value": "F" },
+    { "start": 4.04, "end": 4.18, "value": "C" },
+    { "start": 4.18, "end": 4.26, "value": "A" },
+    { "start": 4.26, "end": 4.56, "value": "F" },
+    { "start": 4.56, "end": 4.91, "value": "B" },
+    { "start": 4.91, "end": 5.29, "value": "C" },
+    { "start": 5.29, "end": 5.92, "value": "B" },
+    { "start": 5.92, "end": 6.13, "value": "C" },
+    { "start": 6.13, "end": 6.20, "value": "B" },
+    { "start": 6.20, "end": 6.86, "value": "X" }
+  ]
+}

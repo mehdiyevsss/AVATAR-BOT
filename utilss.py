@@ -19,30 +19,40 @@ def get_rag_response(user_input):
     results = retrieve(user_input, index, chunks)
     prompt = build_prompt(user_input, results)
 
-    system_prompt = """You are a helpful customer service assistant for Swisscom AG. 
-    Use ONLY the provided context to answer questions. If the information is not available 
-    in the context, you must respond with "I don't have enough information to answer 
-    your question accurately" followed by a brief explanation.
-    
-    DO NOT make up information or provide general knowledge that isn't in the context.
-    Be honest about the limitations of your knowledge."""
+    system_prompt_rag = """You are a helpful customer service assistant for Swisscom AG.
+Use the provided context to answer the user's question as accurately as possible.
+If the context does not contain enough information, say: 'I don't have enough information from Swisscom documents to answer that.'
+"""
 
+    # First attempt: use RAG-only prompt
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": system_prompt_rag},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.1  
+        temperature=0.1
     )
-    
-    answer = response.choices[0].message.content
-    
-    # Additional check
-    if not results or len(answer.strip()) < 20:
-        return "I don't have enough information to answer your question accurately. This might be outside my knowledge base."
-    
+
+    answer = response.choices[0].message.content.strip()
+
+    if "i don't have enough information" in answer.lower() or len(answer) < 20:
+        # Second attempt: general GPT fallback
+        system_prompt_general = """You are a helpful assistant for Swisscom AG.
+You may answer based on general knowledge, but if something is uncertain, say so.
+Do not make up specific Swisscom policies unless you are sure."""
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt_general},
+                {"role": "user", "content": user_input}
+            ],
+            temperature=0.3
+        )
+        answer = response.choices[0].message.content.strip()
+
     return answer
+
 
 def speech_to_text(audio_path):
     with open(audio_path, "rb") as audio_file:

@@ -138,7 +138,17 @@ async def transcribe(audio: UploadFile):
 async def respond(text: str = Form(...)):
     response = get_rag_response(text)
 
-    # Check if the response indicates the chatbot doesn't know the answer
+    trigger_operator_phrases = [
+        "talk to a human",
+        "talk to an agent",
+        "connect me to a person",
+        "human operator",
+        "real person",
+        "can i speak to someone",
+        "i want to talk to someone",
+        "live agent"
+    ]
+
     cant_answer_phrases = [
         "i don't know",
         "i'm not sure",
@@ -146,15 +156,17 @@ async def respond(text: str = Form(...)):
         "i cannot find",
         "i'm unable to",
         "i don't have enough information",
-        "sorry, i don't know"
+        "sorry, i couldn't find"
     ]
 
+    user_text_lower = text.lower()
     response_lower = response.lower()
-    cant_answer = any(
-        phrase in response_lower for phrase in cant_answer_phrases)
 
-    if cant_answer or len(response.strip()) < 10:
-        response = "I don't have enough information to answer your question accurately. Would you like me to connect you with a human operator who can better assist you?"
+    wants_operator = any(phrase in user_text_lower for phrase in trigger_operator_phrases)
+    cant_answer = any(phrase in response_lower for phrase in cant_answer_phrases)
+
+    if cant_answer or len(response.strip()) < 10 or wants_operator:
+        response = "Would you like me to connect you with a human operator who can better assist you?"
         cant_answer = True
 
     audio_path = text_to_speech(response)
@@ -163,6 +175,7 @@ async def respond(text: str = Form(...)):
         "audio_url": f"/audio/{os.path.basename(audio_path)}",
         "needs_human_operator": cant_answer
     }
+
 
 
 @app.get("/audio/{filename}")

@@ -299,388 +299,117 @@
     </div>
   </div>
  
-  
-
-
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <script>
     const recordBtn = document.getElementById("recordBtn");
-    const humanBtn  = document.getElementById("humanBtn");
+    const stopBtn = document.getElementById("stopBtn");
     const messagesEl = document.getElementById("messages");
-    const avatar    = document.querySelector("#avatar");
 
-    // =========== LIP-SYNC SETUP ===========
-    let mouthMesh, audioCtx, analyser, dataArray;
-    
+    let currentAudio = null;
+    let mediaRecorder;
+    let listening = false;
 
-  // —— Replace the old load/polling block with this ——
-   // —— Replace your old load-handler with this ——
-  
-
-  // —— NEW load+polling block ——
-  function setupMouthMesh() {
-  if (!avatar) return;
-  avatar.traverse(child => {
-    if (child.isMesh && child.morphTargetDictionary) {
-      const morphs = child.morphTargetDictionary;
-      const names = Object.keys(morphs);
-      let key = names.find(n => /mouth|open|viseme_aa/i.test(n));
-      if (!key) {
-        console.warn("No usable morph target found, using first:", names[0]);
-        key = names[0];
-      }
-      mouthMesh = child;
-      openIndex = morphs[key];
-      console.log(`✅ Using ${child.name} with morph "${key}" at index ${openIndex}`);
-    }
-  });
-}
-
-
-  // —— UPDATED startLipSync ——  
-  function startLipSync(audio) {
-    if (!mouthMesh) return;
-
-    const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    const src     = audioCtx.createMediaElementSource(audio);
-    const analyser= audioCtx.createAnalyser();
-    analyser.fftSize = 128;
-    src.connect(analyser);
-    analyser.connect(audioCtx.destination);
-
-    const data = new Uint8Array(analyser.fftSize);
-    (function animateMouth(){
-      analyser.getByteTimeDomainData(data);
-      let sum = 0;
-      for (let v of data) {
-        const n = (v/128) - 1;
-        sum += n*n;
-      }
-      const rms = Math.sqrt(sum/data.length);
-
-      // use the dynamically-picked index
-      mouthMesh.morphTargetInfluences[openIndex] = Math.min(rms * 2, 1);
-
-      requestAnimationFrame(animateMouth);
-    })();
-  }
-
-
-    // ======================================
-
-    // =========== RECORD/TRANSCRIBE ===========
-    let mediaRecorder, audioChunks = [];
-    let audioCtxInput, analyserInput, micSource;   // for VAD
-    recordBtn.onclick = async () => {
+    async function startListening() {
+      if (listening) return;
+      listening = true;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunks = [];
+      const audioCtx = new AudioContext();
+      const micSource = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      micSource.connect(analyser);
+      const data = new Uint8Array(analyser.fftSize);
+
       mediaRecorder = new MediaRecorder(stream);
+      let audioChunks = [];
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => processRecording();
 
-      audioCtxInput = new AudioContext();
-      micSource = audioCtxInput.createMediaStreamSource(stream);
-      analyserInput = audioCtxInput.createAnalyser();
-      micSource.connect(analyserInput);
-      detectSilence();
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunks, { type: "audio/mp3" });
+        processRecording(blob).then(() => {
+          listening = false;
+          startListening();  // Restart automatically
+        });
+      };
 
-      showLoading(true);
+      audioChunks = [];
       mediaRecorder.start();
-    };
+      detectSilence(analyser, data);
+      addMessage("system", "🎤 Listening...");
+    }
 
-    function detectSilence(threshold = 0.01, timeout = 1500) {
-      const data = new Uint8Array(analyserInput.fftSize);
-      let lastActivity = Date.now();
-      (function loop(){
-        analyserInput.getByteTimeDomainData(data);
-        const silent = data.every(v=>Math.abs(v-128) < threshold*128);
-        if (!silent) lastActivity = Date.now();
-        if (Date.now() - lastActivity > timeout && mediaRecorder.state==="recording") {
+    function detectSilence(analyser, data, timeout = 1200, threshold = 10) {
+      let lastSound = Date.now();
+      (function loop() {
+        analyser.getByteTimeDomainData(data);
+        const silent = data.every(v => Math.abs(v - 128) < threshold);
+        if (!silent) lastSound = Date.now();
+        if (Date.now() - lastSound > timeout && mediaRecorder.state === "recording") {
           mediaRecorder.stop();
-        } else {
+        } else if (mediaRecorder.state === "recording") {
           requestAnimationFrame(loop);
         }
       })();
     }
 
-    function showLoading(loading) {
-      if (loading) {
-        recordBtn.disabled = true;
-        recordBtn.innerHTML = `Listening... <span class="spinner"></span>`;
-      } else {
-        recordBtn.disabled = false;
-        recordBtn.textContent = "🎙️ Record";
-      }
-    }
-    // ========================================
-
-    async function processRecording() {
-      const audioBlob = new Blob(audioChunks, { type: "audio/mp3" });
+    async function processRecording(blob) {
       const formData = new FormData();
-      formData.append("audio", audioBlob, "voice.mp3");
+      formData.append("audio", blob, "voice.mp3");
 
-      // send to your /transcribe endpoint
-      const trans = await fetch("http://localhost:8000/transcribe", { method:"POST", body:formData })
-                        .then(r=>r.json());
-      addMessage("user", trans.transcript);
+      const trans = await fetch("/transcribe", { method: "POST", body: formData })
+        .then(r => r.json()).catch(() => null);
 
-      // send to /respond
-      const respForm = new FormData();
-      respForm.append("text", trans.transcript);
-      const resp = await fetch("http://localhost:8000/respond", { method:"POST", body:respForm })
-                       .then(r=>r.json());
-      addMessage("assistant", resp.response);
-
-      if (resp.needs_human_operator) {
-        humanBtn.style.display = "block";
-        addMessage("system",
-          "I can connect you with a human operator…");
-      }
-
-      // === PLAY & LIP-SYNC ===
-      const audio = new Audio("http://localhost:8000"+resp.audio_url);
-      audio.addEventListener('play',()=> startLipSync(audio));
-      audio.play();
-      showLoading(false);
-    }
-
-    function addMessage(role,text) {
-      const div = document.createElement("div");
-      div.className = `message ${role}`;
-      div.textContent = text;
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-        // ====== RTC BUTTONS & ELEMENTS ======
-    const videoContainer    = document.getElementById("videoContainer");
-    const connectionStatus  = document.getElementById("connectionStatus");
-    const localVideo        = document.getElementById("localVideo");
-    const remoteVideo       = document.getElementById("remoteVideo");
-    const toggleVideoBtn    = document.getElementById("toggleVideo");
-    const toggleAudioBtn    = document.getElementById("toggleAudio");
-    const endCallBtn        = document.getElementById("endCall");
-
-    // ====== UTILS ======
-    function generateUUID() {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-        .replace(/[xy]/g, c => (Math.random()*16|0).toString(16));
-    }
-
-    // ====== HUMAN BUTTON ======
-    humanBtn.onclick = initializeVideoCall;
-
-    // ====== WEBRTC STATE ======
-    let localStream, peerConnection, signalingSocket;
-    const clientId = generateUUID();
-    let isVideoEnabled = true, isAudioEnabled = true;
-
-    // ====== INITIALIZE VIDEO CALL ======
-    async function initializeVideoCall() {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-        localVideo.srcObject = localStream;
-        videoContainer.classList.add('active');
-        setupPeerConnection();
-        connectToSignalingServer();
-        addMessage("system", "Connecting you to a human operator...");
-      } catch (err) {
-        console.error(err);
-        addMessage("system", "Unable to access camera/microphone.");
-      }
-    }
-
-    // ====== PEER CONNECTION ======
-    function setupPeerConnection() {
-      peerConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ]
-      });
-      localStream.getTracks().forEach(track =>
-        peerConnection.addTrack(track, localStream)
-      );
-      peerConnection.ontrack = e => {
-        remoteVideo.srcObject = e.streams[0];
-        connectionStatus.textContent = "Connected to operator";
-        connectionStatus.className = "connection-status connected";
-      };
-      peerConnection.onicecandidate = e => {
-        if (e.candidate && signalingSocket.readyState===WebSocket.OPEN) {
-          signalingSocket.send(JSON.stringify({ type:'ice-candidate', candidate:e.candidate }));
-        }
-      };
-      peerConnection.onconnectionstatechange = () => {
-        const s = peerConnection.connectionState;
-        if (s==='disconnected' || s==='failed') {
-          connectionStatus.textContent = "Connection lost";
-          connectionStatus.className = "connection-status disconnected";
-          setTimeout(endVideoCall,2000);
-        }
-      };
-    }
-
-    // ====== SIGNALING ======
-    function connectToSignalingServer() {
-      const WS_BASE = window.location.protocol==='https:'?'wss:':'ws:';
-      signalingSocket = new WebSocket(`${WS_BASE}//${window.location.host}/ws/signaling/${clientId}/customer`);
-      signalingSocket.onopen = () => {
-        connectionStatus.textContent = "Waiting for operator...";
-        connectionStatus.className = "connection-status connecting";
-      };
-      signalingSocket.onmessage = async ({data}) => {
-        const msg = JSON.parse(data);
-        switch(msg.type) {
-          case 'matched':
-            connectionStatus.textContent = "Operator found! Establishing connection...";
-            const offer = await peerConnection.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true });
-            await peerConnection.setLocalDescription(offer);
-            signalingSocket.send(JSON.stringify({ type:'offer', offer }));
-            break;
-          case 'answer':
-            await peerConnection.setRemoteDescription(msg.answer);
-            break;
-          case 'ice-candidate':
-            await peerConnection.addIceCandidate(msg.candidate);
-            break;
-          case 'partner_disconnected':
-            connectionStatus.textContent = "Operator disconnected";
-            connectionStatus.className = "connection-status disconnected";
-            setTimeout(endVideoCall,2000);
-            break;
-        }
-      };
-      signalingSocket.onerror = e => {
-        console.error(e);
-        connectionStatus.textContent = "Connection error";
-        connectionStatus.className = "connection-status disconnected";
-      };
-      signalingSocket.onclose = () => {
-        if (videoContainer.classList.contains('active')) {
-          connectionStatus.textContent = "Connection lost";
-          connectionStatus.className = "connection-status disconnected";
-        }
-      };
-    }
-
-    // ====== VIDEO CONTROLS ======
-    toggleVideoBtn.onclick = () => {
-      isVideoEnabled = !isVideoEnabled;
-      localStream.getVideoTracks().forEach(t=>t.enabled=isVideoEnabled);
-      toggleVideoBtn.textContent = isVideoEnabled?"📹 Video On":"📹 Video Off";
-    };
-    toggleAudioBtn.onclick = () => {
-      isAudioEnabled = !isAudioEnabled;
-      localStream.getAudioTracks().forEach(t=>t.enabled=isAudioEnabled);
-      toggleAudioBtn.textContent = isAudioEnabled?"🎤 Audio On":"🎤 Audio Off";
-    };
-    endCallBtn.onclick = endVideoCall;
-
-    function endVideoCall() {
-      if (peerConnection) { peerConnection.close(); peerConnection=null; }
-      if (signalingSocket && signalingSocket.readyState===WebSocket.OPEN) {
-        signalingSocket.send(JSON.stringify({type:'disconnect'}));
-        signalingSocket.close();
-      }
-      if (localStream) {
-        localStream.getTracks().forEach(t=>t.stop());
-        localStream=null;
-      }
-      videoContainer.classList.remove('active');
-      humanBtn.style.display = "none";
-      addMessage("system", "Video call ended. You can continue chatting.");
-    }
-
-    // ====== CLEANUP ON UNLOAD ======
-    window.addEventListener('beforeunload', () => {
-      if (peerConnection||signalingSocket) endVideoCall();
-    });
-
-    // ✅ Define addMessage function
-    function addMessage(role, text) {
-      const messagesEl = document.getElementById("messages");
-      const div = document.createElement("div");
-      div.className = `message ${role}`;
-      div.textContent = text;
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    recordBtn.onclick = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => processRecording();
-
-      mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 3000);
-    };
-
-    async function processRecording() {
-      const audioBlob = new Blob(audioChunks, { type: "audio/mp3" });
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "voice.mp3");
-
-      console.log("Sending audio to /transcribe...");
-      const trans = await fetch("/transcribe", {
-        method: "POST",
-        body: formData
-      }).then(res => res.json()).catch(err => {
-        console.error("/transcribe error:", err);
-      });
-
-      console.log("Transcript:", trans);
       if (!trans || !trans.transcript) {
         addMessage("system", "⚠️ No transcription received.");
         return;
       }
+
       addMessage("user", trans.transcript);
-
-      const checkInterruptForm = new FormData();
-      checkInterruptForm.append("audio", audioBlob, "voice.mp3");
-      const interrupt = await fetch("/interrupt-check", {
-        method: "POST",
-        body: checkInterruptForm
-      }).then(res => res.json()).catch(() => ({ interrupt: false }));
-
-      if (interrupt.interrupt && currentAudio) {
-        currentAudio.pause();
-        addMessage("system", "🔇 Audio playback interrupted.");
-        return;
-      }
 
       const respForm = new FormData();
       respForm.append("text", trans.transcript);
-      console.log("Sending transcript to /respond...", trans.transcript);
+      const resp = await fetch("/respond", { method: "POST", body: respForm })
+        .then(r => r.json()).catch(() => null);
 
-      const resp = await fetch("/respond", {
-        method: "POST",
-        body: respForm
-      }).then(res => res.json()).catch(err => {
-        console.error("/respond error:", err);
-      });
-
-      console.log("Bot reply:", resp);
       if (!resp || !resp.response) {
         addMessage("system", "⚠️ Bot failed to respond.");
         return;
       }
-      addMessage("assistant", resp.response);
 
-      if (resp.needs_human_operator) {
-        humanBtn.style.display = "block";
-        addMessage("system", "Want to speak to a human?");
-      }
+      addMessage("assistant", resp.response);
 
       if (currentAudio) currentAudio.pause();
       currentAudio = new Audio(resp.audio_url);
-      console.log("Playing audio:", resp.audio_url);
-      currentAudio.play();
+      return new Promise(resolve => {
+        currentAudio.addEventListener("ended", resolve);
+        currentAudio.play();
+      });
     }
+
+    function addMessage(role, text) {
+      const div = document.createElement("div");
+      div.className = `message ${role}`;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // Start Listening on Button
+    recordBtn.onclick = () => {
+      startListening();
+    };
+
+    // Stop Listening
+    stopBtn.onclick = () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        listening = false;
+        addMessage("system", "🛑 Listening stopped.");
+      }
+    };
+
+    // Optionally auto-start on load
+    // window.onload = () => startListening();
+  </script>
   </script>
 </body>
 </html>

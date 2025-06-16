@@ -73,3 +73,55 @@ def text_to_speech(text):
     path = f"audio/{uuid.uuid4().hex}.mp3"
     response.stream_to_file(path)
     return path
+
+async def forward_to_deepgram(client_ws):
+    """Relays audio from the client to Deepgram for transcription and returns the response."""
+    url = "wss://api.deepgram.com/v1/listen?punctuate=true&language=en"
+    headers = {"Authorization": f"Token {DEEPGRAM_API_KEY}"}
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(url, headers=headers) as deepgram_ws:
+
+                async def receive_from_client():
+                    try:
+                        while True:
+                            data = await client_ws.receive_bytes()
+                            if deepgram_ws.closed:
+                                print("[CLIENT->DG ERROR] Deepgram WebSocket is closed.")
+                                break
+                            await deepgram_ws.send_bytes(data)
+                    except Exception as e:
+                        print(f"[CLIENT->DG ERROR] {e}")
+
+                async def receive_from_deepgram():
+                    try:
+                        async for msg in deepgram_ws:
+                            if deepgram_ws.closed:
+                                print("[DG->CLIENT ERROR] Deepgram WebSocket is closed.")
+                                break
+                            if msg.type == aiohttp.WSMsgType.TEXT:
+                                res = json.loads(msg.data)
+                                transcript = res.get("channel", {}).get("alternatives", [{}])[0].get("transcript", "")
+
+                                if transcript.strip():
+                                    gpt_response = get_rag_response(transcript)
+                                    audio_path = text_to_speech(gpt_response)
+
+                                    if not deepgram_ws.closed:
+                                        await client_ws.send_text(json.dumps({
+                                            "transcript": transcript,
+                                            "response": gpt_response,
+                                            "audio_url": f"/audio/{os.path.basename(audio_path)}" if audio_path else ""
+                                        }))
+                    except Exception as e:
+                        print(f"[DG->CLIENT ERROR] {e}")
+
+                await asyncio.gather(receive_from_client(), receive_from_deepgram())
+
+    except Exception as e:
+        print(f"[ERROR] Deepgram connection error: {e}")
+    finally:
+        if not deepgram_ws.closed:
+            await deepgram_ws.close()
+        await client_ws.close()

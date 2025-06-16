@@ -2,12 +2,12 @@ import os
 import uuid
 import json
 from typing import Dict, List
-import asyncio
+import asyncio, aiohttp
 from fastapi import FastAPI, UploadFile, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from utilss import speech_to_text, text_to_speech, get_rag_response
+from utilss import speech_to_text, text_to_speech, get_rag_response, forward_to_deepgram
 
 app = FastAPI()
 

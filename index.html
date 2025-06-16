@@ -597,6 +597,90 @@
     window.addEventListener('beforeunload', () => {
       if (peerConnection||signalingSocket) endVideoCall();
     });
+
+    // ✅ Define addMessage function
+    function addMessage(role, text) {
+      const messagesEl = document.getElementById("messages");
+      const div = document.createElement("div");
+      div.className = `message ${role}`;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    recordBtn.onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = () => processRecording();
+
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 3000);
+    };
+
+    async function processRecording() {
+      const audioBlob = new Blob(audioChunks, { type: "audio/mp3" });
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "voice.mp3");
+
+      console.log("Sending audio to /transcribe...");
+      const trans = await fetch("/transcribe", {
+        method: "POST",
+        body: formData
+      }).then(res => res.json()).catch(err => {
+        console.error("/transcribe error:", err);
+      });
+
+      console.log("Transcript:", trans);
+      if (!trans || !trans.transcript) {
+        addMessage("system", "⚠️ No transcription received.");
+        return;
+      }
+      addMessage("user", trans.transcript);
+
+      const checkInterruptForm = new FormData();
+      checkInterruptForm.append("audio", audioBlob, "voice.mp3");
+      const interrupt = await fetch("/interrupt-check", {
+        method: "POST",
+        body: checkInterruptForm
+      }).then(res => res.json()).catch(() => ({ interrupt: false }));
+
+      if (interrupt.interrupt && currentAudio) {
+        currentAudio.pause();
+        addMessage("system", "🔇 Audio playback interrupted.");
+        return;
+      }
+
+      const respForm = new FormData();
+      respForm.append("text", trans.transcript);
+      console.log("Sending transcript to /respond...", trans.transcript);
+
+      const resp = await fetch("/respond", {
+        method: "POST",
+        body: respForm
+      }).then(res => res.json()).catch(err => {
+        console.error("/respond error:", err);
+      });
+
+      console.log("Bot reply:", resp);
+      if (!resp || !resp.response) {
+        addMessage("system", "⚠️ Bot failed to respond.");
+        return;
+      }
+      addMessage("assistant", resp.response);
+
+      if (resp.needs_human_operator) {
+        humanBtn.style.display = "block";
+        addMessage("system", "Want to speak to a human?");
+      }
+
+      if (currentAudio) currentAudio.pause();
+      currentAudio = new Audio(resp.audio_url);
+      console.log("Playing audio:", resp.audio_url);
+      currentAudio.play();
+    }
   </script>
 </body>
 </html>

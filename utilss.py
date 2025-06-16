@@ -7,10 +7,15 @@ from openai import OpenAI
 from utils.embedder import load_index
 from utils.retriever import *
 from utils.prompt_helper import build_prompt
+import json
+import aiohttp, asyncio
+import requests
 
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+
 client = OpenAI(api_key=api_key)
 
 index, chunks = load_index()
@@ -55,13 +60,24 @@ Do not make up specific Swisscom policies unless you are sure."""
 
 
 def speech_to_text(audio_path):
-    with open(audio_path, "rb") as audio_file:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            response_format="text",
-            file=audio_file
-        )
-    return transcript
+    """Converts audio file to text using Deepgram synchronous API."""
+    try:
+        with open(audio_path, 'rb') as audio_file:
+            headers = {
+                'Authorization': f'Token {os.getenv("DEEPGRAM_API_KEY")}',
+                'Content-Type': 'audio/mp3'
+            }
+            response = requests.post(
+                'https://api.deepgram.com/v1/listen?punctuate=true&language=en',
+                headers=headers,
+                data=audio_file
+            )
+            result = response.json()
+            transcript = result.get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript", "")
+            return transcript or ""
+    except Exception as e:
+        print(f"[ERROR] speech_to_text failed: {e}")
+        return ""
 
 def text_to_speech(text):
     response = client.audio.speech.create(

@@ -140,4 +140,3 @@ async def forward_to_deepgram(client_ws):
     finally:
         if not deepgram_ws.closed:
             await deepgram_ws.close()
-        await client_ws.close()

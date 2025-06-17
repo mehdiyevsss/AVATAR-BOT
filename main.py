@@ -102,9 +102,13 @@ async def transcribe(audio: UploadFile):
     temp_path = f"temp_{uuid.uuid4().hex}.mp3"
     with open(temp_path, "wb") as f:
         f.write(await audio.read())
-    transcript = speech_to_text(temp_path)
+    
+    # Use Deepgram transcription instead
+    transcript = await forward_to_deepgram(temp_path)
+
     os.remove(temp_path)
     return {"transcript": transcript}
+
 
 @app.post("/respond")
 async def respond(text: str = Form(...)):
@@ -160,6 +164,15 @@ async def websocket_signaling(websocket: WebSocket, client_id: str, client_type:
         pass
     finally:
         manager.disconnect(client_id)
+
+@app.websocket("/ws/audio")
+async def audio_stream(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        await forward_to_deepgram(websocket)
+    except WebSocketDisconnect:
+        print("User disconnected from audio stream")
+
 
 if __name__ == "__main__":
     import uvicorn

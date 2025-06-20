@@ -1,11 +1,13 @@
 from fastapi import FastAPI, UploadFile, Form
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from utilss import speech_to_text, text_to_speech, get_rag_response
 import os
 import uuid
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,7 +18,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    with open("index.html", "r", encoding="utf-8") as f:
+    with open("static/index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read(), status_code=200)
 
 @app.post("/transcribe")

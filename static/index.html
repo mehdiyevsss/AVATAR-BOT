@@ -1,266 +1,284 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Customer Service Assistant</title>
+  <meta charset="UTF-8" />
+  <title>Voice Avatar Chatbot</title>
   <style>
-    body {
-        font-family: Arial, sans-serif;
-        background-color: #202020;
-        color: white;
-        margin: 0;
-        padding: 0;
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      font-family: "Segoe UI", sans-serif;
+      background: #1e1e1e;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
-    .main-wrapper {
-        display: flex;
-        max-width: 1200px;
-        margin: 0 auto;
-        height: 100vh;
-        overflow: hidden;
-    }
-
-    #avatar-container {
-        flex: 1;
-        background-color: #202020;
-        padding: 10px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+    .container {
+      display: flex;
+      height: 90vh;
+      width: 90vw;
+      max-width: 1400px;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.25);
+      overflow: hidden;
     }
 
     #avatar {
-        width: 100%;
-        height: 100%;
+      flex: 1 1 0;
+      height: 100%;
+      background: url('/static/Swisscom.jpg') center center / cover no-repeat;
     }
 
-    .chat-container {
-        margin-top: 100px;
-        flex: 1;
-        max-width: 500px;
-        height: 600px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        padding: 20px;
-        background-color: #f5f5f5;
-        border-radius: 12px;
-        color: black;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        box-sizing: border-box;
+    .chat-section {
+      flex: 1 1 0;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      background: #f5f5f5;
+      height: 100%;
     }
 
-    h1 {
-        margin-top: 0;
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      padding-right: 10px;
+      display: flex;
+      flex-direction: column;
     }
 
-    #response-area {
-        flex: 1;
-        overflow-y: auto;
-        background-color: #f9f9f9;
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        padding: 10px;
-        margin-bottom: 20px;
-        max-height: 500px;
+    .message {
+      margin-bottom: 10px;
+      padding: 14px 18px;
+      border-radius: 14px;
+      font-size: 15px;
+      max-width: 100%;
+      background: #e0e0e0;
+      color: #000;
     }
 
-    .input-container {
-        display: flex;
-        gap: 10px;
+    .assistant {
+      align-self: flex-start;
+      background-color: #dbe4ff;
     }
 
-    #user-input {
-        flex-grow: 1;
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        font-size: 16px;
+    .user {
+      align-self: flex-end;
+      background-color: #ffe2e2;
     }
 
-    #send-button {
-        padding: 10px 20px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
+    .record-btn {
+      padding: 14px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: none;
+      background: #333;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    #send-button:hover {
-        background-color: #0056b3;
+    .record-btn:disabled {
+      background: #666;
     }
 
-    .loading {
-        text-align: center;
-        color: #666;
-        margin-bottom: 10px;
+    .spinner {
+      width: 16px;
+      height: 16px;
+      margin-left: 10px;
+      border: 2px solid white;
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 
   <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js/+esm",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
-      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.4/modules/talkinghead.mjs"
-    }
-  }
-  </script>
-
-  <script type="module">
-    import { TalkingHead } from "talkinghead";
-    let ws;
-    let mediaRecorder;
-    let recording = false;
-
-    const recordButton = document.getElementById('record-button');
-
-    function toggleRecording() {
-      if (!recording) {
-          startRecording();
-      } else {
-          stopRecording();
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js/+esm",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+        "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/modules/talkinghead.mjs"
       }
     }
-
-    function startRecording() {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-          ws = new WebSocket(`ws://${window.location.host}/ws`);
-          mediaRecorder = new MediaRecorder(stream);
-
-          ws.onmessage = async (event) => {
-              if (event.data instanceof Blob) {
-                  const blob = event.data;
-                  const url = URL.createObjectURL(blob);
-                  const audio = new Audio(url);
-                  head.speakText(" ");
-                  await audio.play();
-              }
-          };
-
-          mediaRecorder.ondataavailable = (e) => {
-              if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-                  ws.send(e.data);
-              }
-          };
-
-          mediaRecorder.start();
-          recordButton.innerText = "🛑 Stop Talking";
-          recording = true;
-      });
-    }
-
-    function stopRecording() {
-      if (mediaRecorder) mediaRecorder.stop();
-      if (ws) ws.close();
-      recordButton.innerText = "🎙️ Start Talking";
-      recording = false;
-    }
-
-    recordButton.addEventListener('click', toggleRecording);
-
-    let head;
-
-    document.addEventListener('DOMContentLoaded', async function () {
-      const nodeAvatar = document.getElementById('avatar');
-      const nodeLoading = document.getElementById('loading');
-      const userInput = document.getElementById('user-input');
-      const sendButton = document.getElementById('send-button');
-      const responseArea = document.getElementById('response-area');
-
-      try {
-        nodeLoading.textContent = "Loading avatar...";
-        head = new TalkingHead(nodeAvatar, {
-          lipsyncModules: ["en", "fi"],
-          cameraView: "upper"
-        });
-
-        await head.showAvatar({
-            url: '/static/brunette.glb',
-            body: 'F',
-            avatarMood: 'neutral',
-            lipsyncLang: 'en'
-        }, (ev) => {
-            if (ev.lengthComputable) {
-                let val = Math.min(100, Math.round(ev.loaded / ev.total * 100));
-                nodeLoading.textContent = "Loading " + val + "%";
-            }
-        });
-        
-
-        nodeLoading.style.display = 'none';
-      } catch (error) {
-        console.error(error);
-        nodeLoading.textContent = "Error loading avatar.";
-      }
-
-      async function playAudio(url) {
-        const audio = new Audio(url);
-        await audio.play();
-      }
-
-      async function sendMessage() {
-        const message = userInput.value.trim();
-        if (!message) return;
-
-        nodeLoading.style.display = 'block';
-        nodeLoading.textContent = "Thinking...";
-
-        responseArea.innerHTML += `<p><strong>You:</strong> ${message}</p>`;
-        userInput.value = '';
-
-        try {
-          const response = await fetch('/ask', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: message }),
-          });
-
-          const data = await response.json();
-
-          if (data.response) {
-            responseArea.innerHTML += `<p><strong>Bot:</strong> ${data.response}</p>`;
-            await playAudio("/static/output.wav");
-          } else if (data.error) {
-            responseArea.innerHTML += `<p><strong>Error:</strong> ${data.error}</p>`;
-          }
-        } catch (error) {
-          responseArea.innerHTML += `<p><strong>Error:</strong> Failed to get response from server.</p>`;
-        } finally {
-          nodeLoading.style.display = 'none';
-          responseArea.scrollTop = responseArea.scrollHeight;
-        }
-      }
-
-      sendButton.addEventListener('click', sendMessage);
-      userInput.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') sendMessage();
-      });
-
-      document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState === "visible") head?.start();
-        else head?.stop();
-      });
-    });
   </script>
 </head>
-
 <body>
-  <div class="main-wrapper">
-    <div id="avatar-container">
-      <div id="avatar"></div>
-    </div>
 
-    <div class="chat-container">
-      <h1>Customer Service Assistant</h1>
-      <div id="response-area"></div>
-      <div class="loading" id="loading">I'm thinking...</div>
-      <div class="input-container">
-        <input type="text" id="user-input" placeholder="Type your message here..." />
-        <button id="send-button">Send</button>
-        <button id="record-button">🎙️ Start Talking</button>
-      </div>
-    </div>
+<div class="container">
+  <div id="avatar"></div>
+
+  <div class="chat-section">
+    <div class="messages" id="messages"></div>
+    <button id="recordBtn" class="record-btn">🎙 Record</button>
   </div>
+</div>
+
+<div id="loading" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 18px;">Loading avatar...</div>
+
+<script type="module">
+import { TalkingHead } from "talkinghead";
+
+let head, audioCtx, analyser, micSource, mediaRecorder, audioChunks = [];
+
+const avatarContainer = document.getElementById("avatar");
+const messagesEl = document.getElementById("messages");
+const recordBtn = document.getElementById("recordBtn");
+
+async function initAvatar() {
+  head = new TalkingHead(avatarContainer, {
+    ttsEndpoint: "none",
+    lipsyncModules: ["en"],
+    cameraView: "full"
+  });
+
+  await head.showAvatar({
+    url: '/static/brunette.glb',
+    body: 'F',
+    avatarMood: 'neutral',
+    lipsyncLang: 'en'
+  }, ev => {
+    if (ev.lengthComputable) {
+      document.getElementById("loading").textContent = `Loading ${Math.round(ev.loaded / ev.total * 100)}%`;
+    }
+  });
+
+  document.getElementById("loading").style.display = "none";
+}
+
+recordBtn.onclick = async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+  audioChunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+  mediaRecorder.onstop = () => processRecording();
+
+  audioCtx = new AudioContext();
+  micSource = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
+  micSource.connect(analyser);
+  detectSilence();
+
+  showLoading(true);
+  mediaRecorder.start();
+};
+
+function detectSilence(threshold = 0.01, timeout = 1500) {
+  const data = new Uint8Array(analyser.fftSize);
+  let lastActivity = Date.now();
+
+  function loop() {
+    analyser.getByteTimeDomainData(data);
+    const isSilent = data.every(v => Math.abs(v - 128) < threshold * 128);
+
+    if (!isSilent) lastActivity = Date.now();
+    if (Date.now() - lastActivity > timeout && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+  loop();
+}
+
+function showLoading(loading) {
+  if (loading) {
+    recordBtn.disabled = true;
+    recordBtn.innerHTML = `Listening... <span class="spinner"></span>`;
+  } else {
+    recordBtn.disabled = false;
+    recordBtn.textContent = "🎙 Record";
+  }
+}
+
+function addMessage(role, text) {
+  const div = document.createElement("div");
+  div.className = `message ${role}`;
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+
+async function processRecording() {
+  const audioBlob = new Blob(audioChunks, { type: "audio/mp3" });
+  const formData = new FormData();
+  formData.append("audio", audioBlob, "voice.mp3");
+
+  const trans = await fetch("http://localhost:8000/transcribe", {
+    method: "POST",
+    body: formData
+  }).then(res => res.json());
+
+  addMessage("user", trans.transcript);
+
+  const respForm = new FormData();
+  respForm.append("text", trans.transcript);
+  const resp = await fetch("http://localhost:8000/respond", {
+    method: "POST",
+    body: respForm
+  }).then(res => res.json());
+
+  addMessage("assistant", resp.response);
+
+  const audioURL = "http://localhost:8000" + resp.audio_url;
+  const blob = await fetch(audioURL).then(r => r.blob());
+  const buffer = await blob.arrayBuffer();
+  const decoded = await head.audioCtx.decodeAudioData(buffer);
+
+  const whisperResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    body: (() => {
+      const f = new FormData();
+      f.append("file", new File([blob], "tts.mp3", { type: "audio/mpeg" }));
+      f.append("model", "whisper-1");
+      f.append("language", "en");
+      f.append("response_format", "verbose_json");
+      f.append("prompt", "[The following is a full verbatim transcription without additional details, comments or emojis:]");
+      f.append("timestamp_granularities[]", "word");
+      return f;
+    })(),
+    headers: {
+      "Authorization": "Bearer PLACE_THE_API_HERE" 
+    }
+  });
+
+  const json = await whisperResp.json();
+
+  const timed = {
+    audio: decoded,
+    words: [],
+    wtimes: [],
+    wdurations: [],
+    markers: [],
+    mtimes: []
+  };
+
+  json.words.forEach(w => {
+    timed.words.push(w.word);
+    timed.wtimes.push(w.start * 1000 - 150);
+    timed.wdurations.push((w.end - w.start) * 1000);
+  });
+
+  head.speakAudio(timed);
+  showLoading(false);
+}
+
+initAvatar();
+</script>
+
 </body>
 </html>

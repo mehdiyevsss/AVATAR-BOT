@@ -1,0 +1,11 @@
+# Python artifacts
+__pycache__/
+
+# Virtual environment
+.venv/
+
+# Environment files
+.env
+
+# Audios
+audio/

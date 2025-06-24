@@ -1,31 +1,83 @@
-import streamlit as st
 import os
-from utilss import speech_to_text, text_to_speech, autoplay_audio, get_rag_response
-from audio_recorder_streamlit import audio_recorder
-from streamlit_float import float_init
-from streamlit.components.v1 import html
+import uuid
+import json
+import asyncio
+from typing import Dict, List
+from fastapi import FastAPI, UploadFile, Form, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from utilss import speech_to_text, text_to_speech, generate_response_and_flag, forward_to_deepgram
 
-st.set_page_config(page_title="Voice Avatar Chatbot", layout="wide")
-float_init()
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
+<<<<<<< HEAD
 st.title("🗣 Voice Avatar Chatbot with RAG")
+=======
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+        self.customer_operator_pairs: Dict[str, str] = {}
+        self.waiting_customers: List[str] = []
+        self.available_operators: List[str] = []
+>>>>>>> ali
 
-# Layout: Avatar left, chat right
-col1, col2 = st.columns([1, 2])
+    async def connect(self, websocket: WebSocket, client_id: str, client_type: str):
+        await websocket.accept()
+        self.active_connections[client_id] = websocket
+        if client_type == "customer":
+            self.waiting_customers.append(client_id)
+            await self.try_match()
+        else:
+            self.available_operators.append(client_id)
+            await self.try_match()
 
-with col1:
-    st.markdown("### Your Assistant")
-    html("""
-<div id="avatar-container">
-  <model-viewer id="avatar" src="https://raw.githubusercontent.com/mehdiyevsss/glb-assets/main/brunette.glb" 
-    autoplay camera-controls interaction-prompt="none"
-    style="width: 100%; height: 400px;" background-color="#111111">
-  </model-viewer>
-</div>
+    async def try_match(self):
+        if self.waiting_customers and self.available_operators:
+            c = self.waiting_customers.pop(0)
+            o = self.available_operators.pop(0)
+            self.customer_operator_pairs[c] = o
+            self.customer_operator_pairs[o] = c
+            await self.send(c, {"type":"matched","partner_id":o,"role":"customer"})
+            await self.send(o, {"type":"matched","partner_id":c,"role":"operator"})
 
-<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-""", height=420)
+    async def send(self, client_id: str, message: dict):
+        ws = self.active_connections.get(client_id)
+        if ws:
+            await ws.send_text(json.dumps(message))
 
+    async def relay(self, message: dict, sender: str):
+        partner = self.customer_operator_pairs.get(sender)
+        if partner:
+            await self.send(partner, message)
+
+    def disconnect(self, client_id: str):
+        # cleanup mappings omitted for brevity
+        self.active_connections.pop(client_id, None)
+        if client_id in self.customer_operator_pairs:
+            partner = self.customer_operator_pairs.pop(client_id)
+            self.customer_operator_pairs.pop(partner, None)
+            # notify partner
+            ws = self.active_connections.get(partner)
+            if ws:
+                asyncio.create_task(ws.send_text(json.dumps({"type":"partner_disconnected"})))
+        for lst in (self.waiting_customers, self.available_operators):
+            if client_id in lst: lst.remove(client_id)
+
+manager = ConnectionManager()
+
+@app.get("/")
+def root():
+    return HTMLResponse(open("index.html","r",encoding="utf-8").read())
+
+<<<<<<< HEAD
 with col2:
     if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I assist you?"}]
@@ -66,25 +118,56 @@ with col2:
         </style>
         <div class="chat-box">
     """, unsafe_allow_html=True)
+=======
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+@app.get("/operator")
+def operator():
+    return HTMLResponse(open("operator.html","r",encoding="utf-8").read())
 
-    st.markdown("</div>", unsafe_allow_html=True)
+@app.post("/transcribe")
+async def transcribe(audio: UploadFile):
+    path = f"tmp_{uuid.uuid4().hex}.mp3"
+    with open(path,"wb") as f: f.write(await audio.read())
+    txt = speech_to_text(path)
+    os.remove(path)
+    return {"transcript": txt}
 
+@app.post("/respond")
+async def respond(text: str = Form(...)):
+    answer, needs_human, used_rag = generate_response_and_flag(text)
+    audio_path = text_to_speech(answer)
+    return {
+        "response": answer,
+        "audio_url": f"/audio/{os.path.basename(audio_path)}",
+        "needs_human_operator": needs_human,
+        "used_rag": used_rag
+    }
+>>>>>>> ali
+
+
+
+<<<<<<< HEAD
     # Handle voice input transcription
     if audio_bytes:
         with st.spinner("Transcribing..."):
             with open("temp_input.mp3", "wb") as f:
                 f.write(audio_bytes)
             transcript = speech_to_text("temp_input.mp3")
+=======
+@app.websocket("/ws/audio")
+async def audio_ws(ws: WebSocket):
+    await ws.accept()
+    try:
+        await forward_to_deepgram(ws)
+    except WebSocketDisconnect:
+        pass
+>>>>>>> ali
 
-        if transcript:
-            st.session_state.messages.append({"role": "user", "content": transcript})
-            with st.chat_message("user"):
-                st.write(transcript)
+@app.get("/audio/{file}")
+def serve_audio(file: str):
+    return FileResponse(os.path.join("audio", file), media_type="audio/mpeg")
 
+<<<<<<< HEAD
     # Generate response if last message is user
     if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
@@ -95,15 +178,37 @@ with col2:
                 autoplay_audio(audio_file)
                 st.write(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
+=======
+@app.websocket("/ws/signaling/{cid}/{ctype}")
+async def signaling(ws: WebSocket, cid: str, ctype: str):
+    await manager.connect(ws, cid, ctype)
+    try:
+        while True:
+            msg = json.loads(await ws.receive_text())
+            t = msg.get("type")
+            if t in ("offer","answer","ice-candidate"):
+                await manager.relay(msg, cid)
+            elif t=="disconnect":
+                break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        manager.disconnect(cid)
+>>>>>>> ali
 
-                # Avatar fake lip sync trigger
-                st.markdown(f"""
-                <script>
-                  window.parent.postMessage({{
-                    type: 'SPEAK',
-                    duration: 2000
-                  }}, '*');
-                </script>
-                """, unsafe_allow_html=True)
+@app.get("/debug/connections")
+def debug():
+    return {
+        "connections": list(manager.active_connections),
+        "pairs": manager.customer_operator_pairs,
+        "waiting": manager.waiting_customers,
+        "available": manager.available_operators
+    }
 
+<<<<<<< HEAD
                 os.remove(audio_file)
+=======
+if __name__=="__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+>>>>>>> ali

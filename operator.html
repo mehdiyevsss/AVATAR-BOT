@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Operator Dashboard - Swisscom Support</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 82vh;
+      width: 99vw;
+      font-family: "Segoe UI", sans-serif;
+      background: #1a1a2e;
+      color: white;
+    }
+
+    .header {
+      background: #16213e;
+      padding: 20px;
+      border-bottom: 2px solid #0f3460;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      margin: 0;
+      color: #00d4ff;
+      font-size: 24px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: bold;
+    }
+
+    .status-available {
+      background: #28a745;
+    }
+
+    .status-busy {
+      background: #dc3545;
+    }
+
+    .status-offline {
+      background: #6c757d;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: white;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    .main-content {
+      display: flex;
+      height: calc(100vh - 80px);
+    }
+
+    .sidebar {
+      width: 300px;
+      background: #16213e;
+      border-right: 2px solid #0f3460;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .waiting-customers {
+      margin-bottom: 30px;
+    }
+
+    .waiting-customers h3 {
+      color: #00d4ff;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .customer-item {
+      background: #0f3460;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: background 0.3s;
+      border: 2px solid transparent;
+    }
+
+    .customer-item:hover {
+      background: #1e4a6b;
+      border-color: #00d4ff;
+    }
+
+    .customer-id {
+      font-weight: bold;
+      color: #00d4ff;
+      margin-bottom: 5px;
+    }
+
+    .customer-waiting-time {
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .stats {
+      background: #0f3460;
+      padding: 15px;
+      border-radius: 8px;
+    }
+
+    .stats h3 {
+      color: #00d4ff;
+      margin-bottom: 10px;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .video-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .no-call-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      background: radial-gradient(circle, #1a1a2e 0%, #16213e 100%);
+    }
+
+    .no-call-state .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      opacity: 0.5;
+    }
+
+    .no-call-state h2 {
+      margin-bottom: 10px;
+      color: #00d4ff;
+    }
+
+    .no-call-state p {
+      color: #aaa;
+      text-align: center;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+
+    .video-call-area {
+      display: none;
+      height: 60%;
+      flex-direction: column;
+    }
+
+    .video-call-area.active {
+      display: flex;
+    }
+
+    .customer-info {
+      background: #16213e;
+      padding: 15px;
+      border-bottom: 2px solid #0f3460;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .customer-details h3 {
+      margin: 0 0 5px 0;
+      color: #00d4ff;
+    }
+
+    .customer-details p {
+      margin: 0;
+      color: #aaa;
+      font-size: 14px;
+    }
+
+    .call-duration {
+      font-size: 18px;
+      font-weight: bold;
+      color: #28a745;
+    }
+
+    .video-container {
+      flex: 1;
+      display: flex;
+      gap: 20px;
+      padding: 20px;
+      background: #1a1a2e;
+    }
+
+    .video-box {
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .customer-video {
+      width: 450px;
+      height: 400px;
+    }
+
+    .operator-video {
+      width: 450px;
+      height: 400px;
+    }
+
+    .video-box video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .video-label {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .video-controls {
+      padding: 20px;
+      background: #16213e;
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      border-top: 2px solid #0f3460;
+    }
+
+    .control-btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn-video {
+      background: #007bff;
+      color: white;
+    }
+
+    .btn-video.off {
+      background: #6c757d;
+    }
+
+    .btn-audio {
+      background: #28a745;
+      color: white;
+    }
+
+    .btn-audio.off {
+      background: #6c757d;
+    }
+
+    .btn-end {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-end:hover {
+      background: #c82333;
+    }
+
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #007bff;
+      color: white;
+      padding: 15px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      display: none;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    .notification.show {
+      display: block;
+    }
+
+    .notification.success {
+      background: #28a745;
+    }
+
+    .notification.error {
+      background: #dc3545;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎧 Swisscom Support Dashboard</h1>
+  <div class="status-indicator status-available" id="statusIndicator">
+    <div class="status-dot"></div>
+    <span id="statusText">Available</span>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="sidebar">
+    <div class="waiting-customers">
+      <h3>⏳ Waiting Customers</h3>
+      <div id="waitingCustomers">
+        <div style="text-align: center; color: #aaa; font-style: italic; padding: 20px;">
+          No customers waiting
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <h3>📊 Today's Stats</h3>
+      <div class="stat-item">
+        <span>Calls Handled:</span>
+        <span id="callsHandled">0</span>
+      </div>
+      <div class="stat-item">
+        <span>Average Duration:</span>
+        <span id="avgDuration">0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="video-area">
+    <!-- No Active Call State -->
+    <div class="no-call-state" id="noCallState">
+      <div class="icon">📞</div>
+      <h2>Ready to Help Customers</h2>
+      <p>You're currently available to receive calls. When a customer requests human support, they'll appear in the waiting queue on the left. Click on a waiting customer to start a video call.</p>
+    </div>
+
+    <!-- Active Video Call State -->
+    <div class="video-call-area" id="videoCallArea">
+      <div class="customer-info">
+        <div class="customer-details">
+          <h3 id="customerName">Customer #12345</h3>
+          <p id="customerDetails">Connected from Switzerland • Waiting time: 2 minutes</p>
+        </div>
+        <div class="call-duration" id="callDuration">00:00</div>
+      </div>
+
+      <div class="video-container">
+        <div class="video-box customer-video">
+          <video id="customerVideo" autoplay></video>
+          <div class="video-label">Customer</div>
+        </div>
+        <div class="video-box operator-video">
+          <video id="operatorVideo" autoplay muted></video>
+          <div class="video-label">You</div>
+        </div>
+      </div>
+
+      <div class="video-controls">
+        <button class="control-btn btn-video" id="toggleVideoBtn">
+          📹 <span>Video On</span>
+        </button>
+        <button class="control-btn btn-audio" id="toggleAudioBtn">
+          🎤 <span>Audio On</span>
+        </button>
+        <button class="control-btn btn-end" id="endCallBtn">
+          📞 <span>End Call</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+class OperatorDashboard {
+  constructor() {
+    this.operatorId = this.generateUUID();
+    this.API_BASE = window.location.origin;
+    this.WS_BASE = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.WS_HOST = window.location.host;
+    this.signalingSocket = null;
+    this.peerConnection = null;
+    this.localStream = null;
+    this.isVideoEnabled = true;
+    this.isAudioEnabled = true;
+    this.currentCustomerId = null;
+    this.callStartTime = null;
+    this.callDurationInterval = null;
+    this.stats = {
+      callsHandled: 0,
+      totalDuration: 0,
+      rating: 5
+    };
+
+    this.initializeElements();
+    this.setupEventListeners();
+    this.loadStats();
+    
+    // Initialize everything asynchronously
+    this.initialize();
+  }
+
+  // NEW: Async initialization method
+  async initialize() {
+    try {
+      // Initialize media first
+      await this.initializeOperatorMedia();
+      
+      // Update control buttons based on available media
+      this.updateControlButtons();
+      
+      // Then connect to signaling server
+      this.connectToSignalingServer();
+      
+    } catch (error) {
+      console.error('Error during initialization:', error);
+      this.showNotification('Failed to initialize dashboard', 'error');
+    }
+  }
+
+  generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  initializeElements() {
+    this.elements = {
+      statusIndicator: document.getElementById('statusIndicator'),
+      statusText: document.getElementById('statusText'),
+      waitingCustomers: document.getElementById('waitingCustomers'),
+      noCallState: document.getElementById('noCallState'),
+      videoCallArea: document.getElementById('videoCallArea'),
+      customerName: document.getElementById('customerName'),
+      customerDetails: document.getElementById('customerDetails'),
+      callDuration: document.getElementById('callDuration'),
+      customerVideo: document.getElementById('customerVideo'),
+      operatorVideo: document.getElementById('operatorVideo'),
+      toggleVideoBtn: document.getElementById('toggleVideoBtn'),
+      toggleAudioBtn: document.getElementById('toggleAudioBtn'),
+      endCallBtn: document.getElementById('endCallBtn'),
+      notification: document.getElementById('notification'),
+      callsHandled: document.getElementById('callsHandled'),
+      avgDuration: document.getElementById('avgDuration'),
+      customerRating: document.getElementById('customerRating')
+    };
+  }
+
+  setupEventListeners() {
+    this.elements.toggleVideoBtn.onclick = () => this.toggleVideo();
+    this.elements.toggleAudioBtn.onclick = () => this.toggleAudio();
+    this.elements.endCallBtn.onclick = () => this.endCall();
+  }
+
+  async connectToSignalingServer() {
+    const wsUrl = `${this.WS_BASE}//${this.WS_HOST}/ws/signaling/${this.operatorId}/operator`;
+    console.log('Operator connecting to:', wsUrl);
+    
+    this.signalingSocket = new WebSocket(wsUrl);
+
+    this.signalingSocket.onopen = () => {
+      console.log('Connected to signaling server as operator');
+      this.updateStatus('available', 'Available');
+      this.showNotification('Connected to support system', 'success');
+    };
+
+    this.signalingSocket.onmessage = async (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('Operator received signaling message:', message.type);
+        await this.handleSignalingMessage(message);
+      } catch (error) {
+        console.error('Error handling signaling message:', error);
+      }
+    };
+
+    this.signalingSocket.onclose = (event) => {
+      console.log('Operator signaling connection closed:', event.code, event.reason);
+      this.updateStatus('offline', 'Offline');
+      this.showNotification('Disconnected from support system', 'error');
+      
+      // Attempt to reconnect after 3 seconds if not manually closed
+      if (event.code !== 1000) {
+        setTimeout(() => this.connectToSignalingServer(), 3000);
+      }
+    };
+
+    this.signalingSocket.onerror = (error) => {
+      console.error('Operator signaling error:', error);
+      this.showNotification('Connection error occurred', 'error');
+    };
+  }
+
+  async handleSignalingMessage(message) {
+    console.log('=== Operator received message ===');
+    console.log('Type:', message.type);
+    console.log('Full message:', message);
+    console.log('Current peer connection state:', this.peerConnection?.connectionState || 'null');
+    console.log('================================');
+    
+    switch (message.type) {
+      case 'matched':
+        console.log('Operator matched with customer:', message.partner_id);
+        await this.handleCustomerMatch(message);
+        break;
+      case 'offer':
+        console.log('Operator received offer from customer');
+        await this.handleOffer(message.offer);
+        break;
+      case 'ice-candidate':
+        console.log('Operator received ICE candidate');
+        await this.handleIceCandidate(message.candidate);
+        break;
+      case 'partner_disconnected':
+        console.log('Customer disconnected');
+        this.showNotification('Customer disconnected', 'error');
+        this.endCall();
+        break;
+      default:
+        console.log('Unknown message type:', message.type);
+    }
+  }
+
+  async handleCustomerMatch(message) {
+    this.currentCustomerId = message.partner_id;
+    this.showNotification('New customer connected!', 'success');
+    
+    // Update customer info
+    this.elements.customerName.textContent = `Customer #${this.currentCustomerId.substring(0, 8)}`;
+    this.elements.customerDetails.textContent = 'Just connected • Swisscom Support Request';
+    
+    await this.initializeCall();
+  }
+
+  async initializeCall() {
+    try {
+      console.log('Operator initializing call...');
+      console.log('Current localStream state:', this.localStream ? 'available' : 'null');
+      
+      // If we don't have a local stream yet, try to get one
+      if (!this.localStream) {
+        console.log('No existing local stream, attempting to create one...');
+        await this.initializeOperatorMedia();
+      }
+      
+      // Setup peer connection
+      await this.setupPeerConnection();
+      
+      // Show video call area
+      this.elements.noCallState.style.display = 'none';
+      this.elements.videoCallArea.classList.add('active');
+      
+      // Update status
+      this.updateStatus('busy', 'In Call');
+      
+      // Start call timer
+      this.startCallTimer();
+      
+      // Update control buttons
+      this.updateControlButtons();
+      
+      console.log('✅ Operator call initialization complete');
+      
+    } catch (error) {
+      console.error('❌ Error initializing call:', error);
+      this.showNotification(`Failed to initialize call: ${error.message}`, 'error');
+      this.endCall();
+    }
+  }
+
+  async setupPeerConnection() {
+    const configuration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ]
+    };
+
+    this.peerConnection = new RTCPeerConnection(configuration);
+    console.log('✅ Peer connection created');
+
+    // Add local stream to peer connection if available
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        this.peerConnection.addTrack(track, this.localStream);
+        console.log('Operator added track:', track.kind);
+      });
+    } else {
+      console.log('No local stream to add to peer connection');
+    }
+
+    // Handle remote stream
+    this.peerConnection.ontrack = (event) => {
+      console.log('✅ Operator received remote stream');
+      this.elements.customerVideo.srcObject = event.streams[0];
+      this.showNotification('Customer video connected', 'success');
+    };
+
+    // Handle ICE candidates
+    this.peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log('Operator sending ICE candidate');
+        if (this.signalingSocket.readyState === WebSocket.OPEN) {
+          this.signalingSocket.send(JSON.stringify({
+            type: 'ice-candidate',
+            candidate: event.candidate
+          }));
+        }
+      }
+    };
+
+    this.peerConnection.onconnectionstatechange = () => {
+      const state = this.peerConnection.connectionState;
+      console.log('Operator connection state:', state);
+      
+      if (state === 'connected') {
+        this.showNotification('✅ Connected to customer', 'success');
+      } else if (state === 'disconnected' || state === 'failed') {
+        this.showNotification('❌ Connection lost', 'error');
+        setTimeout(() => this.endCall(), 2000);
+      }
+    };
+
+    this.peerConnection.oniceconnectionstatechange = () => {
+      console.log('Operator ICE connection state:', this.peerConnection.iceConnectionState);
+    };
+    
+    console.log('✅ Peer connection setup complete');
+  }
+
+  async handleOffer(offer) {
+    try {
+      console.log('Operator handling offer');
+      
+      if (!this.peerConnection) {
+        console.error('No peer connection available when handling offer');
+        this.showNotification('Connection setup failed', 'error');
+        return;
+      }
+      
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log('Operator set remote description');
+      
+      const answer = await this.peerConnection.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      });
+      console.log('Operator created answer');
+      
+      await this.peerConnection.setLocalDescription(answer);
+      console.log('Operator set local description');
+      
+      if (this.signalingSocket && this.signalingSocket.readyState === WebSocket.OPEN) {
+        this.signalingSocket.send(JSON.stringify({
+          type: 'answer',
+          answer: answer
+        }));
+        console.log('Operator sent answer to customer');
+        this.showNotification('Establishing connection...', 'info');
+      } else {
+        throw new Error('Signaling socket not available');
+      }
+      
+    } catch (error) {
+      console.error('Error handling offer:', error);
+      this.showNotification(`Connection failed: ${error.message}`, 'error');
+      
+      setTimeout(() => {
+        if (this.peerConnection && this.peerConnection.connectionState !== 'connected') {
+          this.endCall();
+        }
+      }, 5000);
+    }
+  }
+
+  async handleIceCandidate(candidate) {
+    try {
+      if (this.peerConnection) {
+        await this.peerConnection.addIceCandidate(candidate);
+      }
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+    }
+  }
+
+  // media initialization
+  async initializeOperatorMedia() {
+    try {
+      console.log('Initializing operator media...');
+      
+      // Check if media devices are supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Media devices not supported by this browser');
+      }
+      
+      // Check available devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasCamera = devices.some(device => device.kind === 'videoinput');
+      const hasMicrophone = devices.some(device => device.kind === 'audioinput');
+      
+      console.log('Available devices:', { hasCamera, hasMicrophone });
+      
+      if (!hasCamera && !hasMicrophone) {
+        this.showNotification('No camera or microphone detected', 'warning');
+        return;
+      }
+      
+      let mediaStream = null;
+      let mediaConfig = null;
+      
+      // Try video + audio first
+      if (hasCamera && hasMicrophone) {
+        try {
+          console.log('Attempting video + audio...');
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: 'user'
+            },
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
+          mediaConfig = 'video + audio';
+          console.log('✅ Got video + audio stream');
+        } catch (error) {
+          console.log('❌ Video + audio failed:', error.message);
+          
+          // Try basic video + audio
+          try {
+            console.log('Attempting basic video + audio...');
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: true
+            });
+            mediaConfig = 'basic video + audio';
+            console.log('✅ Got basic video + audio stream');
+          } catch (basicError) {
+            console.log('❌ Basic video + audio failed:', basicError.message);
+          }
+        }
+      }
+      
+      // Fallback to audio only
+      if (!mediaStream && hasMicrophone) {
+        try {
+          console.log('Attempting audio only...');
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
+          mediaConfig = 'audio only';
+          console.log('✅ Got audio-only stream');
+        } catch (error) {
+          console.log('❌ Audio only failed:', error.message);
+          
+          // Try basic audio
+          try {
+            console.log('Attempting basic audio...');
+            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaConfig = 'basic audio only';
+            console.log('✅ Got basic audio stream');
+          } catch (basicAudioError) {
+            console.log('❌ Basic audio failed:', basicAudioError.message);
+          }
+        }
+      }
+      
+      if (mediaStream) {
+        this.localStream = mediaStream;
+        
+        // Show local video preview if available
+        const videoTracks = mediaStream.getVideoTracks();
+        if (videoTracks.length > 0 && this.elements.operatorVideo) {
+          this.elements.operatorVideo.srcObject = mediaStream;
+          this.elements.operatorVideo.muted = true; // Prevent echo
+          console.log('✅ Local video preview enabled');
+        } else if (this.elements.operatorVideo) {
+          // Show audio-only placeholder
+          this.elements.operatorVideo.style.background = '#333';
+          this.elements.operatorVideo.innerHTML = '<div style="color: white; text-align: center; line-height: 200px;">Audio Only</div>';
+        }
+        
+        this.showNotification(`Media ready (${mediaConfig})`, 'success');
+        console.log(`✅ Media initialized: ${mediaConfig}`);
+        
+      } else {
+        console.log('❌ No media stream could be obtained');
+        this.showNotification('Could not access camera or microphone', 'error');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error initializing operator media:', error);
+      this.showNotification(`Media initialization failed: ${error.message}`, 'error');
+    }
+  }
+
+  // Update control buttons
+  updateControlButtons() {
+    const hasVideo = this.localStream && this.localStream.getVideoTracks().length > 0;
+    const hasAudio = this.localStream && this.localStream.getAudioTracks().length > 0;
+    
+    console.log('Updating control buttons:', { hasVideo, hasAudio, localStream: !!this.localStream });
+    
+    // Update video button
+    if (hasVideo) {
+      this.elements.toggleVideoBtn.disabled = false;
+      this.elements.toggleVideoBtn.title = 'Toggle camera on/off';
+      this.elements.toggleVideoBtn.className = 'control-btn btn-video';
+      this.elements.toggleVideoBtn.innerHTML = '📹 <span>Video On</span>';
+    } else {
+      this.elements.toggleVideoBtn.disabled = true;
+      this.elements.toggleVideoBtn.title = 'Camera not available';
+      this.elements.toggleVideoBtn.className = 'control-btn btn-video disabled';
+      this.elements.toggleVideoBtn.innerHTML = '📹 <span>No Camera</span>';
+    }
+    
+    // Update audio button
+    if (hasAudio) {
+      this.elements.toggleAudioBtn.disabled = false;
+      this.elements.toggleAudioBtn.title = 'Toggle microphone on/off';
+      this.elements.toggleAudioBtn.className = 'control-btn btn-audio';
+      this.elements.toggleAudioBtn.innerHTML = '🎤 <span>Audio On</span>';
+    } else {
+      this.elements.toggleAudioBtn.disabled = true;
+      this.elements.toggleAudioBtn.title = 'Microphone not available';
+      this.elements.toggleAudioBtn.className = 'control-btn btn-audio disabled';
+      this.elements.toggleAudioBtn.innerHTML = '🎤 <span>No Microphone</span>';
+    }
+  }
+
+  toggleVideo() {
+    // Check if localStream exists and has video tracks
+    if (!this.localStream) {
+      this.showNotification('Camera not available - no local stream', 'error');
+      console.error('Cannot toggle video: localStream is null');
+      return;
+    }
+
+    const videoTracks = this.localStream.getVideoTracks();
+    if (videoTracks.length === 0) {
+      this.showNotification('No video track available', 'warning');
+      console.warn('Cannot toggle video: no video tracks found');
+      return;
+    }
+
+    // Toggle video
+    this.isVideoEnabled = !this.isVideoEnabled;
+    videoTracks.forEach(track => {
+      track.enabled = this.isVideoEnabled;
+    });
+    
+    const btn = this.elements.toggleVideoBtn;
+    if (this.isVideoEnabled) {
+      btn.className = 'control-btn btn-video';
+      btn.innerHTML = '📹 <span>Video On</span>';
+    } else {
+      btn.className = 'control-btn btn-video off';
+      btn.innerHTML = '📹 <span>Video Off</span>';
+    }
+    
+    console.log('Video toggled:', this.isVideoEnabled);
+    this.showNotification(`Video ${this.isVideoEnabled ? 'enabled' : 'disabled'}`, 'info');
+  }
+
+  endCall() {
+    // Stop call timer
+    this.stopCallTimer();
+    
+    // Close peer connection
+    if (this.peerConnection) {
+      this.peerConnection.close();
+      this.peerConnection = null;
+    }
+
+    // Close signaling
+    if (this.signalingSocket && this.signalingSocket.readyState === WebSocket.OPEN) {
+      this.signalingSocket.send(JSON.stringify({ type: 'disconnect' }));
+    }
+    
+    // Reset UI
+    this.elements.videoCallArea.classList.remove('active');
+    this.elements.noCallState.style.display = 'flex';
+    
+    // Update status
+    this.updateStatus('available', 'Available');
+    
+    // Update stats
+    this.updateStats();
+    
+    // Reset customer info
+    this.currentCustomerId = null;
+    
+    this.showNotification('Call ended', 'success');
+  }
+
+  // Method to completely shut down
+  shutdown() {
+    // Stop local stream
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+    }
+    
+    // Close peer connection
+    if (this.peerConnection) {
+      this.peerConnection.close();
+      this.peerConnection = null;
+    }
+    
+    // Close signaling socket
+    if (this.signalingSocket) {
+      this.signalingSocket.close();
+      this.signalingSocket = null;
+    }
+  }
+
+  startCallTimer() {
+    this.callStartTime = Date.now();
+    this.callDurationInterval = setInterval(() => {
+      const duration = Date.now() - this.callStartTime;
+      const minutes = Math.floor(duration / 60000);
+      const seconds = Math.floor((duration % 60000) / 1000);
+      this.elements.callDuration.textContent = 
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+  }
+
+  stopCallTimer() {
+    if (this.callDurationInterval) {
+      clearInterval(this.callDurationInterval);
+      this.callDurationInterval = null;
+    }
+  }
+
+  updateStatus(status, text) {
+    this.elements.statusIndicator.className = `status-indicator status-${status}`;
+    this.elements.statusText.textContent = text;
+  }
+
+  showNotification(message, type = 'info') {
+    const notification = this.elements.notification;
+    notification.textContent = message;
+    notification.className = `notification show ${type}`;
+    
+    setTimeout(() => {
+      notification.classList.remove('show');
+    }, 4000);
+  }
+
+  updateStats() {
+    if (this.callStartTime) {
+      const duration = Date.now() - this.callStartTime;
+      this.stats.callsHandled++;
+      this.stats.totalDuration += duration;
+      
+      const avgDuration = this.stats.totalDuration / this.stats.callsHandled;
+      const minutes = Math.floor(avgDuration / 60000);
+      const seconds = Math.floor((avgDuration % 60000) / 1000);
+      
+      this.elements.callsHandled.textContent = this.stats.callsHandled;
+      this.elements.avgDuration.textContent = 
+        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      
+      // Save stats to localStorage
+      localStorage.setItem('operatorStats', JSON.stringify({
+        ...this.stats,
+        date: new Date().toDateString()
+      }));
+    }
+  }
+
+  loadStats() {
+    const saved = localStorage.getItem('operatorStats');
+    if (saved) {
+      const data = JSON.parse(saved);
+      // Only load if it's from today
+      if (data.date === new Date().toDateString()) {
+        this.stats = data;
+        this.elements.callsHandled.textContent = this.stats.callsHandled;
+        
+        if (this.stats.callsHandled > 0) {
+          const avgDuration = this.stats.totalDuration / this.stats.callsHandled;
+          const minutes = Math.floor(avgDuration / 60000);
+          const seconds = Math.floor((avgDuration % 60000) / 1000);
+          this.elements.avgDuration.textContent = 
+            `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+      }
+    }
+  }
+}
+
+// Initialize the operator dashboard
+let dashboardInstance = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  dashboardInstance = new OperatorDashboard();
+  window.dashboard = dashboardInstance;
+});
+
+// Handle page unload
+window.addEventListener('beforeunload', (event) => {
+  // Close connections gracefully
+  if (dashboardInstance) {
+    dashboardInstance.shutdown();
+  }
+});
+</script>
+
+</body>
+</html>

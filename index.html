@@ -309,84 +309,75 @@
     const messagesEl = document.getElementById("messages");
     const avatar    = document.querySelector("#avatar");
 
-    // =========== LIP-SYNC SETUP ===========
-    let mouthMesh, audioCtx, analyser, dataArray;
-    
 
-  // —— Replace the old load/polling block with this ——
-   // —— Replace your old load-handler with this ——
-  
-
-  // —— NEW load+polling block ——
-  function setupMouthMesh() {
-  if (!avatar) return;
-  avatar.traverse(child => {
-    if (child.isMesh && child.morphTargetDictionary) {
-      const morphs = child.morphTargetDictionary;
-      const names = Object.keys(morphs);
-      let key = names.find(n => /mouth|open|viseme_aa/i.test(n));
-      if (!key) {
-        console.warn("No usable morph target found, using first:", names[0]);
-        key = names[0];
-      }
-      mouthMesh = child;
-      openIndex = morphs[key];
-      console.log(`✅ Using ${child.name} with morph "${key}" at index ${openIndex}`);
-    }
-  });
+    function addMessage(role, text) {
+  const div = document.createElement("div");
+  div.className = `message ${role}`;
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 
-  // —— UPDATED startLipSync ——  
-  function startLipSync(audio) {
-    if (!mouthMesh) return;
-
-    const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    const src     = audioCtx.createMediaElementSource(audio);
-    const analyser= audioCtx.createAnalyser();
-    analyser.fftSize = 128;
-    src.connect(analyser);
-    analyser.connect(audioCtx.destination);
-
-    const data = new Uint8Array(analyser.fftSize);
-    (function animateMouth(){
-      analyser.getByteTimeDomainData(data);
-      let sum = 0;
-      for (let v of data) {
-        const n = (v/128) - 1;
-        sum += n*n;
-      }
-      const rms = Math.sqrt(sum/data.length);
-
-      // use the dynamically-picked index
-      mouthMesh.morphTargetInfluences[openIndex] = Math.min(rms * 2, 1);
-
-      requestAnimationFrame(animateMouth);
-    })();
-  }
 
 
-    // ======================================
 
     // =========== RECORD/TRANSCRIBE ===========
-    let mediaRecorder, audioChunks = [];
-    let audioCtxInput, analyserInput, micSource;   // for VAD
-    recordBtn.onclick = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => processRecording();
+  let mediaRecorder, audioChunks = [];
+  let audioCtxInput, analyserInput, micSource;   // for VAD
+  let currentAudio = null;
 
-      audioCtxInput = new AudioContext();
-      micSource = audioCtxInput.createMediaStreamSource(stream);
-      analyserInput = audioCtxInput.createAnalyser();
-      micSource.connect(analyserInput);
-      detectSilence();
+  recordBtn.onclick = () => {
+  // If TTS is still playing, cut it off
+  if (currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+  }
 
-      showLoading(true);
-      mediaRecorder.start();
-    };
+  // Open the streaming STT WebSocket
+  const ws = new WebSocket(
+    `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://` +
+    `${window.location.host}/ws/audio`
+  );
+
+  // Handle incoming transcripts + bot replies
+  ws.onmessage = ({ data }) => {
+    const { transcript, response, audio_url, needs_human_operator } = JSON.parse(data);
+    addMessage("user", transcript);
+    addMessage("assistant", response);
+
+    if (needs_human_operator) {
+      humanBtn.style.display = "block";
+      addMessage("system", "Please click the button below to connect with a human operator.");
+    }
+
+    // Play the TTS and lip-sync
+    currentAudio = new Audio(audio_url);
+    currentAudio.play();
+  };
+
+  // Stream mic audio in 250ms chunks
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      recorder.ondataavailable = e => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(e.data);
+        }
+      };
+      recorder.start(250);
+
+      // Stop recording when the WS closes
+      ws.onclose = () => recorder.stop();
+    })
+    .catch(err => console.error("Mic error:", err));
+};
+
+
+
+
+  
+
+    
 
     function detectSilence(threshold = 0.01, timeout = 1500) {
       const data = new Uint8Array(analyserInput.fftSize);
@@ -412,45 +403,11 @@
         recordBtn.textContent = "🎙️ Record";
       }
     }
-    // ========================================
+    
 
-    async function processRecording() {
-      const audioBlob = new Blob(audioChunks, { type: "audio/mp3" });
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "voice.mp3");
+    
 
-      // send to your /transcribe endpoint
-      const trans = await fetch("http://localhost:8000/transcribe", { method:"POST", body:formData })
-                        .then(r=>r.json());
-      addMessage("user", trans.transcript);
-
-      // send to /respond
-      const respForm = new FormData();
-      respForm.append("text", trans.transcript);
-      const resp = await fetch("http://localhost:8000/respond", { method:"POST", body:respForm })
-                       .then(r=>r.json());
-      addMessage("assistant", resp.response);
-
-      if (resp.needs_human_operator) {
-        humanBtn.style.display = "block";
-        addMessage("system",
-          "I can connect you with a human operator…");
-      }
-
-      // === PLAY & LIP-SYNC ===
-      const audio = new Audio("http://localhost:8000"+resp.audio_url);
-      audio.addEventListener('play',()=> startLipSync(audio));
-      audio.play();
-      showLoading(false);
-    }
-
-    function addMessage(role,text) {
-      const div = document.createElement("div");
-      div.className = `message ${role}`;
-      div.textContent = text;
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
+      
 
         // ====== RTC BUTTONS & ELEMENTS ======
     const videoContainer    = document.getElementById("videoContainer");

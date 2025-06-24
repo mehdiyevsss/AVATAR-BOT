@@ -4,6 +4,7 @@ import numpy as np
 import pickle
 import os
 from config import EMBED_MODEL_NAME
+from utils.data_loader import load_all_files
 
 model = SentenceTransformer(EMBED_MODEL_NAME)
 
@@ -27,15 +28,16 @@ def build_vector_index(chunks, index_path="vectorstore/faiss_index.pkl"):
     return index, chunks
 
 def load_index(index_path="vectorstore/faiss_index.pkl"):
-    """Load existing FAISS vector index"""
+    """Load or (if missing) build vector index from everything in data/."""
     if not os.path.exists(index_path):
-        # If index doesn't exist, create it from data
-        from data_loader import load_all_files
-        chunks = load_all_files()
+        print("🔨 No index found—building from data/ …")
+        chunks = load_all_files(data_dir="data")    # ← PDF, JSON, DOCX, TXT
         return build_vector_index(chunks, index_path)
-    
+
+    print(f"📥 Loading index from {index_path}")
     with open(index_path, "rb") as f:
-        return pickle.load(f)
+        index, chunks = pickle.load(f)
+    return index, chunks
 
 def embed_query(query):
     """Encode a single query string into a vector"""

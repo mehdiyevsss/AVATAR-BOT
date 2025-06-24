@@ -22,10 +22,13 @@ def retrieve(query, index, chunks, top_k=3, similarity_threshold=0.7):
     
     return results
 
-def retrieve_with_context(query, index, chunks, top_k=3, context_window=1):
-    
-    results = retrieve(query, index, chunks, top_k)
-    
+def retrieve_with_context(query, index, chunks,
+                          top_k=5,
+                          similarity_threshold=0.4,
+                          context_window=1):
+
+    results = retrieve(query, index, chunks, top_k, similarity_threshold)
+
     enhanced_results = []
     for result in results:
         # Find the original chunk index

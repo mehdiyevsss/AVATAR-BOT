@@ -4,12 +4,9 @@
   <meta charset="UTF-8" />
   <title>Voice Avatar Chatbot</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
-    html,
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       height: 100vh;
@@ -33,15 +30,12 @@
       overflow: hidden;
     }
 
-    model-viewer {
+    #avatar {
       flex: 1 1 0;
       height: 100%;
-      background: 
-    url('/static/Swisscom.jpg')   /* path to your JPEG */
-    center center            /* position */
-    / cover no-repeat;  
-      background-color: #000;
-    } 
+      background: url('/static/Swisscom.jpg') center center / cover no-repeat;
+    }
+
 
     .chat-section {
       flex: 1 1 0;
@@ -143,9 +137,7 @@
     }
 
     @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+      to { transform: rotate(360deg); }
     }
 
     .video-container {
@@ -254,26 +246,26 @@
       color: #721c24;
     }
   </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js/+esm",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+        "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/modules/talkinghead.mjs"
+      }
+    }
+  </script>
 </head>
 
 <body>
   <div class="container">
-    <model-viewer
-      id="avatar"
-      field-of-view="10deg"
-      animation-name="Wave"
-      nimation-crossfade-duration="0.5"
-
-      src="static/avatar2.glb"
-      
-      style="--poster-color: transparent;">
-    </model-viewer>
-
+    <div id="avatar"></div>
 
     <div class="chat-section">
       <div class="messages" id="messages"></div>
       <div class="controls">
-        <button id="recordBtn" class="record-btn">🎙️ Record</button>
+        <button id="recordBtn" class="record-btn">🎙️ Start</button>
         <button id="humanBtn" class="human-btn" style="display: none;">👥 Connect to Human</button>
       </div>
     </div>
@@ -282,16 +274,19 @@
   <!-- Video Call Container (unchanged) -->
   <div class="video-container" id="videoContainer">
     <div class="connection-status" id="connectionStatus">Connecting to operator...</div>
+
     <div class="video-grid">
       <div class="video-box local-video">
         <video id="localVideo" autoplay muted></video>
         <div class="video-label">You</div>
       </div>
+
       <div class="video-box remote-video">
         <video id="remoteVideo" autoplay></video>
         <div class="video-label">Operator</div>
       </div>
     </div>
+
     <div class="video-controls">
       <button id="toggleVideo" class="toggle-video">📹 Video On</button>
       <button id="toggleAudio" class="toggle-audio">🎤 Audio On</button>
@@ -299,85 +294,121 @@
     </div>
   </div>
  
-  
-
-
+  <!-- Model Viewer -->
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-  <script>
+  
+  <!-- Main Script -->
+  <script type="module">
+    import { TalkingHead } from "talkinghead";
+
+    let head;
+    const avatarContainer = document.getElementById("avatar");
+
+    async function initAvatar() {
+      // === constructor now includes lipsyncModules & lipsyncLang ===
+      head = new TalkingHead(avatarContainer, {
+        ttsEndpoint: "none",
+        lipsyncModules: ["en"],    // ← load English viseme module
+        lipsyncLang: "en",         // ← drive lip-sync in English
+        cameraView: "full"
+      });
+
+      await head.showAvatar({
+        url: 'https://models.readyplayer.me/685addbcb695ba2bdaf8c7a3.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown&textureSizeLimit=1024&textureFormat=png',
+        body: 'M',
+        avatarMood: 'neutral'
+      });
+    }
+
     const recordBtn = document.getElementById("recordBtn");
     const humanBtn  = document.getElementById("humanBtn");
     const messagesEl = document.getElementById("messages");
-    const avatar    = document.querySelector("#avatar");
-
 
     function addMessage(role, text) {
-  const div = document.createElement("div");
-  div.className = `message ${role}`;
-  div.textContent = text;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-
-
-
-
-    // =========== RECORD/TRANSCRIBE ===========
-  let mediaRecorder, audioChunks = [];
-  let audioCtxInput, analyserInput, micSource;   // for VAD
-  let currentAudio = null;
-
-  recordBtn.onclick = () => {
-  // If TTS is still playing, cut it off
-  if (currentAudio && !currentAudio.paused) {
-    currentAudio.pause();
-  }
-
-  // Open the streaming STT WebSocket
-  const ws = new WebSocket(
-    `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://` +
-    `${window.location.host}/ws/audio`
-  );
-
-  // Handle incoming transcripts + bot replies
-  ws.onmessage = ({ data }) => {
-    const { transcript, response, audio_url, needs_human_operator } = JSON.parse(data);
-    addMessage("user", transcript);
-    addMessage("assistant", response);
-
-    if (needs_human_operator) {
-      humanBtn.style.display = "block";
-      addMessage("system", "Please click the button below to connect with a human operator.");
+      const div = document.createElement("div");
+      div.className = `message ${role}`;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    // Play the TTS and lip-sync
-    currentAudio = new Audio(audio_url);
-    currentAudio.play();
-  };
+    recordBtn.onclick = async () => {
+      if (!head) {
+        await initAvatar();
+      }
 
-  // Stream mic audio in 250ms chunks
-  navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      recorder.ondataavailable = e => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(e.data);
+      // stop any playing TTS
+      if (head.currentAudio && !head.currentAudio.paused) {
+        head.currentAudio.pause();
+      }
+
+      const ws = new WebSocket(
+        `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://` +
+        `${window.location.host}/ws/audio`
+      );
+
+      ws.onmessage = async ({ data }) => {
+        const { transcript, response, audio_url, needs_human_operator } = JSON.parse(data);
+        addMessage("user", transcript);
+        addMessage("assistant", response);
+
+        if (needs_human_operator) {
+          humanBtn.style.display = "block";
+          addMessage("system", "Please click the button below to connect with a human operator.");
         }
+
+        const blob = await fetch(audio_url).then(r => r.blob());
+        const buffer = await blob.arrayBuffer();
+        const decoded = await head.audioCtx.decodeAudioData(buffer);
+
+        // build timed word arrays
+        const whisperResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          body: (() => {
+            const f = new FormData();
+            f.append("file", new File([blob], "tts.mp3", { type: "audio/mpeg" }));
+            f.append("model", "whisper-1");
+            f.append("language", "en");
+            f.append("response_format", "verbose_json");
+            f.append("prompt", "[The following is a full verbatim transcription without additional details, comments or emojis:]");
+            f.append("timestamp_granularities[]", "word");
+            return f;
+          })(),
+          headers: { "Authorization": "Bearer API-KEY-HERE" }
+        });
+
+        const json = await whisperResp.json();
+        const timed = {
+          audio: decoded,
+          words: [],
+          wtimes: [],
+          wdurations: [],
+          markers: [],
+          mtimes: []
+        };
+
+        json.words.forEach(w => {
+          timed.words.push(w.word);
+          // convert seconds→ms and offset a bit for early mouth opening
+          timed.wtimes.push(w.start * 1000 - 150);
+          timed.wdurations.push((w.end - w.start) * 1000);
+        });
+
+        head.speakAudio(timed);
       };
-      recorder.start(250);
 
-      // Stop recording when the WS closes
-      ws.onclose = () => recorder.stop();
-    })
-    .catch(err => console.error("Mic error:", err));
-};
-
-
-
-
-  
-
-    
+      // start streaming mic
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          recorder.ondataavailable = e => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(e.data);
+          };
+          recorder.start(250);
+          ws.onclose = () => recorder.stop();
+        })
+        .catch(err => console.error("Mic error:", err));
+    };
 
     function detectSilence(threshold = 0.01, timeout = 1500) {
       const data = new Uint8Array(analyserInput.fftSize);
@@ -400,16 +431,11 @@
         recordBtn.innerHTML = `Listening... <span class="spinner"></span>`;
       } else {
         recordBtn.disabled = false;
-        recordBtn.textContent = "🎙️ Record";
+        recordBtn.textContent = "🎙️ Start";
       }
     }
-    
 
-    
-
-      
-
-        // ====== RTC BUTTONS & ELEMENTS ======
+    // ====== RTC BUTTONS & ELEMENTS ======
     const videoContainer    = document.getElementById("videoContainer");
     const connectionStatus  = document.getElementById("connectionStatus");
     const localVideo        = document.getElementById("localVideo");
@@ -533,6 +559,7 @@
       localStream.getAudioTracks().forEach(t=>t.enabled=isAudioEnabled);
       toggleAudioBtn.textContent = isAudioEnabled?"🎤 Audio On":"🎤 Audio Off";
     };
+    
     endCallBtn.onclick = endVideoCall;
 
     function endVideoCall() {
@@ -554,6 +581,9 @@
     window.addEventListener('beforeunload', () => {
       if (peerConnection||signalingSocket) endVideoCall();
     });
+
+    initAvatar(); 
+    
   </script>
 </body>
 </html>

@@ -265,7 +265,7 @@
     <div class="chat-section">
       <div class="messages" id="messages"></div>
       <div class="controls">
-        <button id="recordBtn" class="record-btn">🎙️ Start</button>
+        <button id="recordBtn" class="record-btn">🎙️ Record</button>
         <button id="humanBtn" class="human-btn" style="display: none;">👥 Connect to Human</button>
       </div>
     </div>
@@ -310,14 +310,34 @@
         ttsEndpoint: "none",
         lipsyncModules: ["en"],    // ← load English viseme module
         lipsyncLang: "en",         // ← drive lip-sync in English
-        cameraView: "full"
+        cameraView: "full",
+        debug: true  // Enable debug to see emotion changes
       });
-
+      
       await head.showAvatar({
         url: 'https://models.readyplayer.me/685addbcb695ba2bdaf8c7a3.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown&textureSizeLimit=1024&textureFormat=png',
         body: 'M',
         avatarMood: 'neutral'
       });
+      
+      // Inspect the avatar structure to find bones
+      console.log('Avatar loaded, inspecting structure...');
+      setTimeout(() => {
+        inspectAvatarStructure();
+      }, 1000);
+      
+      // Initialize with a greeting and happy emotion
+      setTimeout(() => {
+        changeEmotion('happy');
+        // Perform a welcome animation after initialization
+        setTimeout(() => {
+          try {
+            triggerAnimation('wave');
+          } catch (error) {
+            console.log('Welcome animation error:', error);
+          }
+        }, 1500); // Give more time for the avatar to fully load
+      }, 2000); // Give more time for initialization
     }
 
     const recordBtn = document.getElementById("recordBtn");
@@ -330,27 +350,496 @@
       div.textContent = text;
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+      
+      // Set emotion based on message content if it's from the assistant
+      if (role === 'assistant' && head) {
+        detectAndSetEmotion(text);
+      }
+    }
+    
+    // Variable to track emotion reset timer
+    let emotionResetTimer = null;
+    
+    // Function to change avatar's emotion
+    function changeEmotion(emotion) {
+      if (!head) return;
+      
+      // Only use emotions we know are supported
+      const supportedEmotions = ['neutral', 'happy', 'sad', 'angry'];
+      if (!supportedEmotions.includes(emotion)) {
+        emotion = 'neutral';
+      }
+      
+      console.log(`Changing emotion to: ${emotion}`);
+      try {
+        head.setMood(emotion);
+        
+        // Clear any existing timer
+        if (emotionResetTimer) {
+          clearTimeout(emotionResetTimer);
+          emotionResetTimer = null;
+        }
+        
+        // Set a timer to reset to neutral after a delay, but only for non-neutral emotions
+        if (emotion !== 'neutral') {
+          const resetDelay = emotion === 'angry' ? 5000 : 8000; // Reset angry faster than other emotions
+          emotionResetTimer = setTimeout(() => {
+            console.log('Resetting emotion to neutral after timeout');
+            try {
+              head.setMood('neutral');
+            } catch (e) {
+              console.log('Failed to reset mood to neutral:', e);
+            }
+          }, resetDelay);
+        }
+      } catch (error) {
+        console.log('Error setting mood:', error);
+        // Fall back to neutral if there's an error
+        if (emotion !== 'neutral') {
+          try {
+            head.setMood('neutral');
+          } catch (e) {
+            console.log('Failed to set neutral mood:', e);
+          }
+        }
+      }
+    }
+    
+    // Function to detect emotion from text and trigger animations
+    function detectAndSetEmotion(text) {
+      // Simple keyword-based emotion detection - only using supported emotions
+      const emotions = {
+        happy: ['happy', 'glad', 'joy', 'exciting', 'excited', 'wonderful', 'great', '😊', '😃', 'thank you'],
+        sad: ['sad', 'sorry', 'unfortunate', 'regret', 'unhappy', 'bad news', '😔', '😢'],
+        angry: ['angry', 'upset', 'frustrating', 'annoyed', 'annoying', '😠', '😡', 'not working', "isn't working", "can't believe", 'terrible', 'awful', 'horrible', 'hate', 'mad', 'furious'],
+        neutral: ['neutral', 'normal', 'standard']
+      };
+      
+      // Log the text for debugging
+      console.log('Detecting emotion from text:', text);
+      
+      // Animation triggers for various gestures
+      const nodTriggers = ['yes', 'agree', 'correct', 'right', 'good', 'exactly', 'absolutely', 'sure', 'definitely'];
+      const waveTriggers = ['hello', 'hi', 'hey', 'greetings', 'welcome', 'goodbye', 'bye', 'see you', 'welcome'];
+      const thumbsUpTriggers = ['awesome', 'excellent', 'perfect', 'great job', 'well done', 'nice', 'cool', 'fantastic', 'brilliant'];
+      const pointTriggers = ['look', 'there', 'that one', 'this one', 'check', 'see that', 'over there', 'direction'];
+      const shakeTriggers = ['no', 'nope', 'disagree', 'incorrect', 'wrong', 'not right', 'never', 'don\'t'];
+      const shrugTriggers = ['maybe', 'perhaps', 'not sure', 'uncertain', 'who knows', 'whatever', 'dunno', 'don\'t know'];
+      
+      const textLower = text.toLowerCase();
+      let detectedEmotion = 'neutral';
+      
+      // Check for question - use happy instead of surprised which may not be supported
+      if (textLower.includes('?')) {
+        detectedEmotion = 'happy';
+      }
+      
+      // First check for angry emotion specifically to prioritize it
+      const angryKeywords = emotions.angry;
+      if (angryKeywords.some(keyword => textLower.includes(keyword))) {
+        detectedEmotion = 'angry';
+        console.log('Angry emotion detected from keywords:', angryKeywords.filter(keyword => textLower.includes(keyword)));
+      } 
+      // Only check for other emotions if angry wasn't detected
+      else {
+        // Check for other emotions
+        for (const [emotion, keywords] of Object.entries(emotions)) {
+          if (emotion !== 'angry' && keywords.some(keyword => textLower.includes(keyword))) {
+            detectedEmotion = emotion;
+            console.log(`${emotion} emotion detected from keywords:`, keywords.filter(keyword => textLower.includes(keyword)));
+            break;
+          }
+        }
+      }
+      
+      changeEmotion(detectedEmotion);
+      
+      // Check for animation triggers
+      console.log('Checking for animation triggers in:', textLower);
+      
+      if (nodTriggers.some(trigger => textLower.includes(trigger))) {
+        console.log('NOD TRIGGER DETECTED:', nodTriggers.filter(trigger => textLower.includes(trigger)));
+        triggerAnimation('nod');
+      } else if (waveTriggers.some(trigger => textLower.includes(trigger))) {
+        console.log('WAVE TRIGGER DETECTED:', waveTriggers.filter(trigger => textLower.includes(trigger)));
+        triggerAnimation('wave');
+      } else if (thumbsUpTriggers.some(trigger => textLower.includes(trigger))) {
+        console.log('THUMBS UP TRIGGER DETECTED:', thumbsUpTriggers.filter(trigger => textLower.includes(trigger)));
+        triggerAnimation('thumbsUp');
+      } else if (pointTriggers.some(trigger => textLower.includes(trigger))) {
+        console.log('POINT TRIGGER DETECTED:', pointTriggers.filter(trigger => textLower.includes(trigger)));
+        triggerAnimation('point');
+      } else if (shakeTriggers.some(trigger => textLower.includes(trigger))) {
+        console.log('SHAKE TRIGGER DETECTED:', shakeTriggers.filter(trigger => textLower.includes(trigger)));
+        triggerAnimation('shake');
+      } else if (shrugTriggers.some(trigger => textLower.includes(trigger))) {
+        console.log('SHRUG TRIGGER DETECTED:', shrugTriggers.filter(trigger => textLower.includes(trigger)));
+        triggerAnimation('shrug');
+      } else {
+        console.log('No animation triggers detected in text');
+      }
+    }
+    
+    // Function to inspect the avatar structure and find bones
+    function inspectAvatarStructure() {
+      if (!head) {
+        console.log('Avatar not fully loaded yet');
+        return;
+      }
+      
+      console.log('Inspecting avatar structure:');
+      
+      // Inspect the TalkingHead object directly
+      console.log('TalkingHead object:', head);
+      
+      // Check what properties and methods are available
+      console.log('Available properties and methods:');
+      for (const prop in head) {
+        console.log(`- ${prop}: ${typeof head[prop]}`);
+      }
+      
+      // Try to access the scene or model
+      if (head.scene) {
+        console.log('Scene found:', head.scene);
+      }
+      
+      if (head.model) {
+        console.log('Model found:', head.model);
+      }
+      
+      // Check if there's a getObject or similar method
+      if (typeof head.getObject === 'function') {
+        console.log('getObject method found, trying to use it...');
+        try {
+          const object = head.getObject();
+          console.log('Retrieved object:', object);
+        } catch (error) {
+          console.log('Error using getObject:', error);
+        }
+      }
+      
+      // Try to access any exposed bones or animation system
+      if (head.bones) {
+        console.log('Bones found:', head.bones);
+      }
+      
+      if (head.animator) {
+        console.log('Animator found:', head.animator);
+      }
+      
+      // Try to access any Three.js objects that might be exposed
+      console.log('Looking for Three.js objects...');
+      ['three', 'THREE', 'threeJS', 'renderer', 'camera'].forEach(prop => {
+        if (head[prop]) {
+          console.log(`Found ${prop}:`, head[prop]);
+        }
+      });
+      
+      // Check if we can access the avatar's source code
+      console.log('TalkingHead prototype:', Object.getPrototypeOf(head));
+      
+      // Try to find any methods related to animation or gestures
+      const animationMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(head))
+        .filter(method => 
+          typeof head[method] === 'function' && 
+          (method.toLowerCase().includes('anim') || 
+           method.toLowerCase().includes('move') || 
+           method.toLowerCase().includes('gesture') || 
+           method.toLowerCase().includes('pose'))
+        );
+      
+      console.log('Animation-related methods:', animationMethods);
+    }
+    
+    // Function to trigger avatar animations using TalkingHead's built-in methods and properties
+    function triggerAnimation(animationType) {
+      console.log(`Animation triggered: ${animationType}`);
+      
+      if (!head) {
+        console.error('Cannot trigger animation: head object not available');
+        return;
+      }
+      
+      // Log available objects for debugging
+      console.log('Available animation objects:', {
+        head: head,
+        objectHead: head.objectHead ? 'Available' : 'Not available',
+        objectRightArm: head.objectRightArm ? 'Available' : 'Not available',
+        objectLeftArm: head.objectLeftArm ? 'Available' : 'Not available',
+        lookAt: typeof head.lookAt === 'function' ? 'Available' : 'Not available'
+      });
+      
+      try {
+        if (animationType === 'nod') {
+          // Use simple head movements for nodding
+          const nodAnimation = async () => {
+            // Use the TalkingHead's built-in lookAt method
+            head.lookAt(0, -0.5, 1); // Look down slightly
+            await new Promise(r => setTimeout(r, 300));
+            head.lookAt(0, 0, 1);    // Look straight
+            await new Promise(r => setTimeout(r, 200));
+            head.lookAt(0, -0.5, 1); // Look down slightly
+            await new Promise(r => setTimeout(r, 300));
+            head.lookAt(0, 0, 1);    // Back to normal
+          };
+          nodAnimation();
+        } else if (animationType === 'shake') {
+          // Head shake animation (no)
+          const shakeAnimation = async () => {
+            const headObj = head.objectHead;
+            let originalRotation = null;
+            
+            if (headObj) {
+              // Store original rotation
+              originalRotation = {
+                x: headObj.rotation.x,
+                y: headObj.rotation.y,
+                z: headObj.rotation.z
+              };
+              
+              // Shake head left and right
+              for (let i = 0; i < 3; i++) {
+                // Shake right
+                for (let j = 0; j < 5; j++) {
+                  headObj.rotation.y -= 0.06;
+                  await new Promise(r => setTimeout(r, 20));
+                }
+                
+                // Shake left
+                for (let j = 0; j < 10; j++) {
+                  headObj.rotation.y += 0.06;
+                  await new Promise(r => setTimeout(r, 20));
+                }
+                
+                // Back to center
+                for (let j = 0; j < 5; j++) {
+                  headObj.rotation.y -= 0.06;
+                  await new Promise(r => setTimeout(r, 20));
+                }
+              }
+              
+              // Return to original position
+              headObj.rotation.x = originalRotation.x;
+              headObj.rotation.y = originalRotation.y;
+              headObj.rotation.z = originalRotation.z;
+            } else {
+              // Fallback using lookAt if head object isn't available
+              head.lookAt(-0.5, 0, 1);
+              await new Promise(r => setTimeout(r, 150));
+              head.lookAt(0.5, 0, 1);
+              await new Promise(r => setTimeout(r, 150));
+              head.lookAt(-0.5, 0, 1);
+              await new Promise(r => setTimeout(r, 150));
+              head.lookAt(0.5, 0, 1);
+              await new Promise(r => setTimeout(r, 150));
+              head.lookAt(0, 0, 1);
+            }
+          };
+          shakeAnimation();
+        } else if (animationType === 'thumbsUp') {
+          // Thumbs up animation
+          const thumbsUpAnimation = async () => {
+            const rightArm = head.objectRightArm;
+            
+            if (rightArm) {
+              // Store original rotation
+              const originalRotation = {
+                x: rightArm.rotation.x,
+                y: rightArm.rotation.y,
+                z: rightArm.rotation.z
+              };
+              
+              // Also animate the head slightly
+              const headObj = head.objectHead;
+              const originalHeadRotation = headObj ? {
+                x: headObj.rotation.x,
+                y: headObj.rotation.y,
+                z: headObj.rotation.z
+              } : null;
+              
+              // Slight smile/nod
+              if (headObj) {
+                headObj.rotation.x -= 0.1;
+              }
+              
+              // Raise arm to thumbs up position
+              for (let i = 0; i < 10; i++) {
+                rightArm.rotation.z += 0.04;
+                rightArm.rotation.x -= 0.02;
+                await new Promise(r => setTimeout(r, 20));
+              }
+              
+              // Hold the thumbs up for a moment
+              await new Promise(r => setTimeout(r, 800));
+              
+              // Add a slight emphasis movement
+              for (let i = 0; i < 2; i++) {
+                // Up motion
+                for (let j = 0; j < 5; j++) {
+                  rightArm.rotation.z += 0.02;
+                  await new Promise(r => setTimeout(r, 20));
+                }
+                
+                // Down motion
+                for (let j = 0; j < 5; j++) {
+                  rightArm.rotation.z -= 0.02;
+                  await new Promise(r => setTimeout(r, 20));
+                }
+              }
+              
+              // Lower arm gradually
+              for (let i = 0; i < 10; i++) {
+                rightArm.rotation.z -= 0.04;
+                rightArm.rotation.x += 0.02;
+                await new Promise(r => setTimeout(r, 30));
+              }
+              
+              // Return to original positions
+              if (headObj && originalHeadRotation) {
+                headObj.rotation.x = originalHeadRotation.x;
+                headObj.rotation.y = originalHeadRotation.y;
+                headObj.rotation.z = originalHeadRotation.z;
+              }
+              
+              rightArm.rotation.x = originalRotation.x;
+              rightArm.rotation.y = originalRotation.y;
+              rightArm.rotation.z = originalRotation.z;
+            } else {
+              // Fallback if arm object isn't available - just nod
+              head.lookAt(0, -0.3, 1);
+              await new Promise(r => setTimeout(r, 300));
+              head.lookAt(0, 0, 1);
+            }
+          };
+          thumbsUpAnimation();
+        } else if (animationType === 'wave') {
+          console.log('Wave animation triggered');
+          
+          // Simple fallback - just use lookAt for a greeting motion
+          // This is a very basic greeting gesture that should work on any avatar
+          const waveAnimation = async () => {
+            try {
+              // Look at user and nod slightly
+              head.lookAt(0, 0, 1);
+              await new Promise(r => setTimeout(r, 300));
+              
+              // Look to the side (as if waving)
+              head.lookAt(0.5, 0, 1);
+              await new Promise(r => setTimeout(r, 300));
+              
+              // Look back at user
+              head.lookAt(0, 0, 1);
+              await new Promise(r => setTimeout(r, 300));
+              
+              console.log('Simple wave animation completed');
+            } catch (error) {
+              console.error('Error during wave animation:', error);
+            }
+          };
+          
+          waveAnimation();
+          return;
+        } else {
+          // Third approach: Try to use pose templates if available
+          if (head.poseTemplates && typeof head.setPose === 'function') {
+            console.log('Trying to use pose templates');
+            // Check if there's a greeting or wave pose
+            const possiblePoses = ['wave', 'greeting', 'hello', 'raise_hand'];
+            
+            for (const pose of possiblePoses) {
+              if (head.poseTemplates[pose]) {
+                console.log(`Using ${pose} pose`);
+                head.setPose(pose);
+                
+                // Reset pose after a few seconds
+                setTimeout(() => {
+                  head.setPose('default');
+                }, 2000);
+                
+                return;
+              }
+            }
+          }
+          
+          // Fallback: Use head movements as before
+          console.log('Using fallback head movement for wave');
+          const waveAnimation = async () => {
+            try {
+              // Look to the side slightly
+              head.lookAt(0.5, 0, 1);
+              await new Promise(r => setTimeout(r, 200));
+              // Look up slightly
+              head.lookAt(0.5, 0.3, 1);
+              await new Promise(r => setTimeout(r, 200));
+              // Look down slightly
+              head.lookAt(0.5, -0.3, 1);
+              await new Promise(r => setTimeout(r, 200));
+              // Look up slightly again
+              head.lookAt(0.5, 0.3, 1);
+              await new Promise(r => setTimeout(r, 200));
+              // Back to normal
+              head.lookAt(0, 0, 1);
+            } catch (error) {
+              console.error('Error during fallback wave animation:', error);
+            }
+          };
+          waveAnimation();
+        }
+      } catch (error) {
+        console.log('Animation error:', error);
+      }
     }
 
+    // Track if we're currently recording
+    let isRecording = false;
+    let currentWs = null;
+    
     recordBtn.onclick = async () => {
       if (!head) {
         await initAvatar();
       }
 
+      // If already recording, do nothing (button is disabled during recording)
+      if (isRecording) return;
+      
       // stop any playing TTS
       if (head.currentAudio && !head.currentAudio.paused) {
         head.currentAudio.pause();
       }
+      
+      // Update button to show we're listening
+      isRecording = true;
+      recordBtn.textContent = "🎤 Listening...";
+      recordBtn.style.backgroundColor = "#dc3545"; // Red background while recording
 
       const ws = new WebSocket(
         `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://` +
         `${window.location.host}/ws/audio`
       );
+      
+      currentWs = ws;
 
       ws.onmessage = async ({ data }) => {
         const { transcript, response, audio_url, needs_human_operator } = JSON.parse(data);
         addMessage("user", transcript);
-        addMessage("assistant", response);
+        
+        // Set a neutral emotion while processing
+        if (head) changeEmotion('neutral');
+        
+        // Short delay before showing response
+        setTimeout(() => {
+          addMessage("assistant", response);
+          
+          // Reset the button after response is received
+          isRecording = false;
+          recordBtn.textContent = "🎙️ Record";
+          recordBtn.style.backgroundColor = "#333"; // Reset to original color
+          
+          // Close the WebSocket connection so user needs to press record again for next question
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close();
+          }
+        }, 300);
 
         if (needs_human_operator) {
           humanBtn.style.display = "block";
@@ -583,6 +1072,8 @@
     });
 
     initAvatar(); 
+    
+    // No emotion testing buttons - emotions will work automatically based on conversation
     
   </script>
 </body>

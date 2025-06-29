@@ -302,6 +302,7 @@
     import { TalkingHead } from "talkinghead";
 
     let head;
+    let currentMood = 'neutral';
     const avatarContainer = document.getElementById("avatar");
 
     async function initAvatar() {
@@ -318,6 +319,9 @@
         body: 'M',
         avatarMood: 'neutral'
       });
+      
+      // Initialize with neutral mood
+      currentMood = 'neutral';
     }
 
     const recordBtn = document.getElementById("recordBtn");
@@ -332,10 +336,34 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    // Track recording state
+    let isRecording = false;
+    let currentRecorder = null;
+    let currentWs = null;
+    
     recordBtn.onclick = async () => {
       if (!head) {
         await initAvatar();
       }
+
+      // If already recording, stop the recording
+      if (isRecording) {
+        if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+          currentWs.close();
+        }
+        if (currentRecorder && currentRecorder.state === "recording") {
+          currentRecorder.stop();
+        }
+        
+        // Reset button state
+        recordBtn.textContent = "🎙️ Start";
+        isRecording = false;
+        return;
+      }
+      
+      // Set button to recording state
+      recordBtn.textContent = "⏹️ Stop";
+      isRecording = true;
 
       // stop any playing TTS
       if (head.currentAudio && !head.currentAudio.paused) {
@@ -346,11 +374,18 @@
         `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://` +
         `${window.location.host}/ws/audio`
       );
+      currentWs = ws;
 
       ws.onmessage = async ({ data }) => {
         const { transcript, response, audio_url, needs_human_operator } = JSON.parse(data);
         addMessage("user", transcript);
         addMessage("assistant", response);
+        
+        // First detect emotions in the user's message
+        detectEmotionAndChangeMood(transcript, true);
+        
+        // Then check the assistant's response, but with lower priority
+        detectEmotionAndChangeMood(response, false);
 
         if (needs_human_operator) {
           humanBtn.style.display = "block";
@@ -396,18 +431,44 @@
 
         head.speakAudio(timed);
       };
+      
+      ws.onclose = () => {
+        // Reset button state if WebSocket closes
+        if (isRecording) {
+          recordBtn.textContent = "🎙️ Start";
+          isRecording = false;
+        }
+      };
 
       // start streaming mic
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
           const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          currentRecorder = recorder;
+          
           recorder.ondataavailable = e => {
             if (ws.readyState === WebSocket.OPEN) ws.send(e.data);
           };
+          
           recorder.start(250);
-          ws.onclose = () => recorder.stop();
+          
+          recorder.onstop = () => {
+            // Clean up the stream tracks when recording stops
+            stream.getTracks().forEach(track => track.stop());
+          };
+          
+          ws.onclose = () => {
+            if (recorder.state === "recording") {
+              recorder.stop();
+            }
+          };
         })
-        .catch(err => console.error("Mic error:", err));
+        .catch(err => {
+          console.error("Mic error:", err);
+          // Reset button state on error
+          recordBtn.textContent = "🎙️ Start";
+          isRecording = false;
+        });
     };
 
     function detectSilence(threshold = 0.01, timeout = 1500) {
@@ -575,6 +636,119 @@
       videoContainer.classList.remove('active');
       humanBtn.style.display = "none";
       addMessage("system", "Video call ended. You can continue chatting.");
+    }
+
+    // ====== EMOTION DETECTION AND MOOD CHANGE ======
+    let emotionResetTimer;
+    const EMOTION_TIMEOUT = 5000; // Time in ms before returning to neutral (5 seconds)
+    
+    // Track if the message is from user or assistant
+    let lastUserEmotion = 'neutral';
+    
+    function detectEmotionAndChangeMood(text, isUserMessage = false) {
+      // Convert to lowercase for easier matching
+      const lowerText = text.toLowerCase();
+      
+      // Define emotion keywords - carefully categorized with priority words
+      const emotionKeywords = {
+        happy: ['happy', 'joy', 'excited', 'great', 'wonderful', 'fantastic', 'amazing', 'delighted', 'pleased', 'glad', 'smile', 'laugh', 'cheerful', 'thrilled', 'excellent', 'good', 'positive', '😊', '😃', '😄', '🙂', '😁'],
+        sad: ['sad', 'unhappy', 'disappointed', 'regret', 'unfortunate', 'depressed', 'gloomy', 'miserable', 'heartbroken', 'cry', 'tears', 'sorrow', 'grief', 'despair', 'melancholy', 'blue', '😢', '😭', '😔', '☹️', '😞'],
+        angry: ['angry', 'annoyed', 'frustrated', 'mad', 'furious', 'irritated', 'outraged', 'rage', 'hostile', 'agitated', 'irate', 'temper', 'enraged', 'livid', 'indignant', 'infuriated', 'upset', '😠', '😡', '🤬', '😤']
+      };
+      
+      // Special handling for assistant responses
+      if (!isUserMessage) {
+        // Ignore "sorry" in assistant responses as it's often just being polite
+        if (lowerText.includes('sorry') && lastUserEmotion !== 'neutral') {
+          console.log("Ignoring 'sorry' in assistant response, keeping user emotion: " + lastUserEmotion);
+          return; // Keep the current emotion
+        }
+      }
+      
+      // Priority words that should take precedence in detection
+      const priorityWords = {
+        happy: ['happy', 'joy', 'excited', 'glad'],
+        sad: ['sad', 'unhappy', 'depressed'],
+        angry: ['angry', 'annoyed', 'frustrated', 'mad', 'furious']
+      };
+      
+      // Check for emotion keywords with improved detection
+      let detectedEmotion = 'neutral';
+      let maxCount = 0;
+      
+      // First check for priority words - these take precedence
+      for (const [emotion, keywords] of Object.entries(priorityWords)) {
+        for (const keyword of keywords) {
+          // Create a regex that looks for the word with boundaries
+          const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+          if (regex.test(lowerText)) {
+            console.log(`Priority word detected: ${keyword} -> ${emotion}`);
+            
+            // If this is a user message, store their emotion
+            if (isUserMessage) {
+              lastUserEmotion = emotion;
+              console.log(`User expressed emotion: ${emotion}`);
+            }
+            
+            return changeMood(emotion); // Immediately change mood if priority word found
+          }
+        }
+      }
+      
+      // If no priority words, do regular detection
+      for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
+        // Count exact word matches (with word boundaries)
+        const wordMatches = keywords.filter(keyword => {
+          // Skip emoji in this check
+          if (keyword.length === 2 && keyword.charCodeAt(0) > 127) return false;
+          
+          // Create a regex that looks for the word with boundaries
+          const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+          return regex.test(lowerText);
+        }).length * 2; // Give more weight to exact matches
+        
+        // Count substring matches (including emoji)
+        const substringMatches = keywords.filter(keyword => lowerText.includes(keyword)).length;
+        
+        const totalScore = wordMatches + substringMatches;
+        console.log(`Emotion score for ${emotion}: ${totalScore}`);
+        
+        if (totalScore > maxCount) {
+          maxCount = totalScore;
+          detectedEmotion = emotion;
+        }
+      }
+      
+      // Only change mood if emotion is detected
+      if (maxCount > 0 && detectedEmotion !== currentMood) {
+        changeMood(detectedEmotion);
+      }
+    }
+    
+    function changeMood(mood) {
+      if (!head || currentMood === mood) return;
+      
+      // Clear any existing timer
+      if (emotionResetTimer) {
+        clearTimeout(emotionResetTimer);
+      }
+      
+      // Update the avatar's mood
+      head.setMood(mood);
+      currentMood = mood;
+      
+      console.log(`Avatar mood changed to: ${mood}`);
+      
+      // Don't show system messages for mood changes
+      
+      // Set timer to return to neutral after timeout
+      if (mood !== 'neutral') {
+        emotionResetTimer = setTimeout(() => {
+          head.setMood('neutral');
+          currentMood = 'neutral';
+          console.log('Avatar mood reset to neutral');
+        }, EMOTION_TIMEOUT);
+      }
     }
 
     // ====== CLEANUP ON UNLOAD ======
